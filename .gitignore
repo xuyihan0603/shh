@@ -1,0 +1,12 @@
+.runtime/
+node_modules/
+project.private.config.json
+.env
+.env.*
+!.env.example
+__pycache__/
+server/private/
+*.pem
+*.key
+*.sqlite
+*.sqlite-*
