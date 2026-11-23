@@ -1,0 +1,122 @@
+<view class="rec-page">
+  <view class="rec-body {{order && !amountOpen && (order.canEdit || order.canSettle) ? 'rec-body-with-dock' : ''}}">
+    <view wx:if="{{loading}}" class="rec-state">正在读取订单…</view>
+    <view wx:elif="{{error}}" class="rec-state">
+      <view>{{error}}</view>
+      <button wx:if="{{needsName}}" class="rec-button rec-secondary" bindtap="openAccount">填写员工姓名</button>
+      <button wx:elif="{{id}}" class="rec-button rec-secondary" bindtap="loadOrder">重新加载</button>
+    </view>
+    <block wx:elif="{{order}}">
+      <view class="order-hero">
+        <view class="rec-between order-hero-head">
+          <text class="order-kind">{{order.kindLabel}}</text>
+          <text class="rec-status rec-status-{{order.status}} order-status">{{order.statusLabel}}</text>
+        </view>
+        <view class="order-contact">{{order.contact || (order.kind === 'walkin' ? '散客到店' : '预订订单')}}</view>
+        <view wx:if="{{customerProfile && (customerProfile.visits || customerProfile.segment)}}" class="order-visits">
+          <text wx:if="{{customerProfile.segment}}" class="rec-status rec-segment-{{customerProfile.segment.id}}">{{customerProfile.segment.label}}</text>
+          <text wx:if="{{customerProfile.visits}}">累计到店 {{customerProfile.visits}} 次</text>
+        </view>
+        <view class="order-schedule">{{order.dateLabel}} · {{order.mealLabel}} · {{order.time}}</view>
+        <view class="order-owner">
+          <text class="order-owner-label">{{order.kind === 'walkin' ? '登记员工' : '原接单人'}}</text>
+          <text class="order-owner-name">{{order.ownerName}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{order.canNotify}}" class="order-notify">
+        <button class="rec-button rec-secondary" bindtap="openNotification" data-channel="wechat" disabled="{{mutating}}">预订消息</button>
+        <button class="rec-button rec-secondary" bindtap="openNotification" data-channel="sms" disabled="{{mutating}}">发送短信</button>
+      </view>
+
+      <view wx:if="{{actionError && !amountOpen}}" class="rec-alert order-error">{{actionError}}</view>
+      <view id="order-payment" class="rec-panel order-panel">
+        <view class="rec-title">款项</view>
+        <view class="order-totals">
+          <view class="order-total">
+            <text class="rec-muted">最终消费</text>
+            <text class="order-amount">{{order.amountLabel}}</text>
+          </view>
+          <view class="order-total order-total-deposit">
+            <text class="rec-muted">已收订金</text>
+            <text class="order-amount">{{order.depositLabel}}</text>
+          </view>
+        </view>
+        <block wx:if="{{order.deposit > 0}}">
+          <view class="order-line">
+            <text class="order-label">收款方式</text>
+            <text class="order-value">{{order.depositMethod}}</text>
+          </view>
+          <view class="order-line">
+            <text class="order-label">经手人</text>
+            <text class="order-value">{{order.depositHandler}}</text>
+          </view>
+        </block>
+        <block wx:if="{{amountOpen}}">
+          <view class="order-amount-entry">
+            <text class="order-entry-title">按收银小票录入最终消费</text>
+            <text class="rec-muted">最终消费包含已抵扣的订金。</text>
+            <view class="order-entry-row">
+              <input class="rec-input order-entry-input" type="digit" focus="{{amountOpen}}" cursor-spacing="48" placeholder="0.00" placeholder-class="rec-placeholder" aria-label="最终消费额" value="{{amountDraft}}" bindinput="changeAmount" disabled="{{mutating}}" />
+              <text>元</text>
+            </view>
+            <view wx:if="{{actionError}}" class="rec-alert order-error">{{actionError}}</view>
+            <view class="order-entry-actions">
+              <button class="rec-button rec-secondary" bindtap="closeAmount" disabled="{{mutating}}">返回</button>
+              <button class="rec-button rec-primary" bindtap="saveAmount" loading="{{mutating}}" disabled="{{mutating}}">确认金额</button>
+            </view>
+          </view>
+        </block>
+        <button wx:elif="{{order.canArrive && order.canSettle}}" class="rec-text-button order-pay" bindtap="openAmount" disabled="{{mutating}}">录最终金额</button>
+      </view>
+
+      <view class="rec-panel order-panel">
+        <view class="rec-title">接待信息</view>
+        <view class="order-line">
+          <text class="order-label">桌位</text>
+          <text class="order-value">{{order.tableLabel || '—'}}</text>
+        </view>
+        <view class="order-line">
+          <text class="order-label">用餐人数</text>
+          <text class="order-value">{{order.guests}} 人</text>
+        </view>
+        <view wx:if="{{order.phone}}" class="order-line">
+          <text class="order-label">联系电话</text>
+          <text class="order-value" user-select>{{order.phone}}</text>
+          <button wx:if="{{order.canDial}}" class="rec-text-button order-dial" bindtap="dial">拨打</button>
+        </view>
+        <view wx:if="{{order.notes}}" class="order-line">
+          <text class="order-label">备注</text>
+          <text class="order-value order-notes">{{order.notes}}</text>
+        </view>
+      </view>
+
+      <view class="rec-panel order-panel">
+        <view class="rec-title">接单记录</view>
+        <view class="order-line">
+          <text class="order-label">{{order.kind === 'walkin' ? '登记日' : '接单日'}}</text>
+          <text class="order-value">{{order.createdDateLabel}}</text>
+        </view>
+        <view class="order-line">
+          <text class="order-label">订单编号</text>
+          <text class="order-value" user-select>{{order.id}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{order.logs.length}}" class="rec-panel order-panel">
+        <view class="rec-title">操作记录</view>
+        <view wx:for="{{order.logs}}" wx:key="index" class="order-log">
+          <view class="order-log-action">{{item.action}}</view>
+          <view class="rec-muted">{{item.actorName}} · {{item.timeLabel}}</view>
+        </view>
+      </view>
+      <button wx:if="{{order.canCancel}}" class="rec-text-button rec-danger order-cancel" data-action="cancel" bindtap="askAction" disabled="{{mutating}}">取消订单</button>
+    </block>
+  </view>
+
+  <view wx:if="{{order && !amountOpen && (order.canEdit || order.canSettle)}}" class="rec-dock">
+    <button wx:if="{{order.canEdit}}" class="rec-button rec-secondary rec-grow" bindtap="edit" disabled="{{mutating}}">编辑订单</button>
+    <button wx:if="{{order.canArrive}}" class="rec-button rec-primary rec-grow" data-action="arrive" bindtap="askAction" disabled="{{mutating}}">确认到店</button>
+    <button wx:elif="{{order.canSettle}}" class="rec-button rec-primary rec-grow" bindtap="openAmount" disabled="{{mutating}}">{{order.status === 'settled' ? '修改金额' : '录最终金额'}}</button>
+  </view>
+</view>

@@ -1,0 +1,54 @@
+@import "../../styles/settings.wxss";
+
+.account-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  padding: 26rpx;
+  border-top: 3rpx solid var(--store-bronze);
+  border-radius: 22rpx;
+  background: var(--store-deep);
+  background: linear-gradient(145deg, #103947, #1c4c58);
+  color: #fff;
+}
+
+.account-logo {
+  flex-shrink: 0;
+  width: 184rpx;
+  height: 167rpx;
+  border-radius: 12rpx;
+  background: #fff;
+}
+
+.account-identity { flex: 1; min-width: 0; word-break: break-word; }
+.account-mode { color: #f0dcb8; font-size: 24rpx; line-height: 1.35; }
+.account-store-name { margin: 6rpx 0 8rpx; font-size: 37rpx; font-weight: 700; line-height: 1.25; }
+.account-role { color: #f4f8f8; font-size: 26rpx; font-weight: 600; }
+.account-detail { color: #d7e7e9; font-size: 25rpx; line-height: 1.5; }
+
+.account-description { margin: 9rpx 0 23rpx; line-height: 1.58; }
+.account-field + .account-field { margin-top: 18rpx; }
+.account-submit { width: 100%; min-height: 90rpx; margin-top: 24rpx; }
+
+.staff-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 90rpx;
+  margin: 0;
+  padding: 18rpx 26rpx;
+  color: var(--store-deep);
+  font-size: 29rpx;
+  font-weight: 650;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.account-next { flex-shrink: 0; color: var(--store-muted); font-size: 38rpx; line-height: 1; }

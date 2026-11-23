@@ -1,0 +1,61 @@
+<view class="store-page">
+  <view class="store-card insights-toolbar">
+    <picker class="store-date" mode="date" end="{{maxDate}}" value="{{endDate}}" bindchange="changeDate">
+      <view class="store-date-label">统计截至</view>
+      <view class="store-date-value"><text>{{endDate}}</text><text class="store-chevron" aria-hidden="true">⌄</text></view>
+    </picker>
+    <button wx:if="{{endDate !== maxDate}}" class="store-link insights-today" bindtap="useToday">回到今天</button>
+  </view>
+  <view wx:if="{{error}}" class="store-card store-state insights-card">
+    <text role="alert">{{error}}</text>
+    <button wx:if="{{needsAccount}}" class="store-link" bindtap="openAccount">去我的</button>
+    <button wx:else class="store-link" bindtap="retry">重新加载</button>
+  </view>
+  <view wx:elif="{{loading}}" class="store-card store-state insights-card">正在读取客群数据…</view>
+  <block wx:else>
+    <view class="store-card insights-card insights-overview">
+      <view class="store-heading">累计到店客人</view>
+      <view class="insights-headline">{{total}}<text class="insights-unit">人</text></view>
+      <view class="insights-track insights-distribution" aria-hidden="true">
+        <view wx:for="{{distribution}}" wx:key="id" class="insights-fill insights-{{item.id}}" style="width: {{item.percent}}%;"></view>
+      </view>
+      <view class="insights-legend-grid">
+        <view wx:for="{{distribution}}" wx:key="id" class="insights-stat">
+          <view class="insights-legend"><view class="insights-dot insights-{{item.id}}" aria-hidden="true"></view><text>{{item.label}}</text></view>
+          <text class="insights-metric">{{item.count}}<text class="insights-unit">人</text></text>
+          <text class="insights-rule">{{item.rule}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="store-card insights-card">
+      <view class="insights-trend-head">
+        <text class="store-heading">每周到店客群</text>
+        <view class="store-switch" aria-label="统计周数">
+          <button wx:for="{{ranges}}" wx:key="*this" class="store-option {{weeks === item ? 'store-option-active' : ''}}" data-weeks="{{item}}" bindtap="changeRange">{{item}} 周</button>
+        </view>
+      </view>
+      <view class="store-caption insights-explanation">每 7 天按联系电话去重，按该时段最后一天的累计到店次数分组。点一行可看各类人数。</view>
+      <view wx:if="{{!hasVisits}}" class="insights-empty">这段时间没有留有联系电话的到店客人。</view>
+      <block wx:else>
+        <view class="insights-axis"><text>用餐日期</text><text>到店人数</text></view>
+        <button wx:for="{{rows}}" wx:key="endDate" class="insights-week {{selected === item.endDate ? 'insights-week-selected' : ''}}" data-end="{{item.endDate}}" bindtap="selectWeek" aria-label="{{item.dateRange}} 共 {{item.total}} 人，点此查看各类人数">
+          <text class="insights-week-date">{{item.dateRange}}</text>
+          <view class="insights-track insights-weekly" aria-hidden="true">
+            <view wx:for="{{item.bars}}" wx:for-item="bar" wx:key="id" class="insights-fill insights-{{bar.id}}" style="width: {{bar.width}}%;"></view>
+          </view>
+          <text class="insights-week-total">{{item.total}}</text>
+        </button>
+        <view class="insights-breakdown">
+          <text class="insights-subheading">截至 {{selected}} 的一周</text>
+          <view class="insights-legend-grid">
+            <view wx:for="{{breakdown}}" wx:key="id" class="insights-stat">
+              <view class="insights-legend"><view class="insights-dot insights-{{item.id}}" aria-hidden="true"></view><text>{{item.label}}</text></view>
+              <text class="insights-metric">{{item.count}}<text class="insights-unit">人</text></text>
+              <text wx:if="{{item.change}}" class="insights-rule">{{item.change}}</text>
+            </view>
+          </view>
+        </view>
+      </block>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,98 @@
+<view class="store-page">
+  <view class="store-card finance-toolbar">
+    <view class="finance-controls">
+      <picker mode="date" fields="{{period === 'month' ? 'month' : 'day'}}" value="{{date}}" disabled="{{!contextReady}}" bindchange="chooseDate" class="store-date">
+        <view class="store-date-label">{{period === 'month' ? '用餐月份' : '用餐日期'}}</view>
+        <view class="store-date-value"><text>{{contextReady ? dateLabel : '—'}}</text><text class="store-chevron" aria-hidden="true">⌄</text></view>
+      </picker>
+      <button class="store-button store-button-primary finance-export" disabled="{{!report || loading || exporting}}" loading="{{exporting}}" bindtap="exportReport">导出全店 Excel</button>
+    </view>
+    <view class="finance-query-controls">
+      <view class="store-switch finance-switch" aria-label="统计周期">
+        <button class="store-option {{period === 'day' ? 'store-option-active' : ''}}" disabled="{{!contextReady}}" data-period="day" bindtap="choosePeriod">按日</button>
+        <button class="store-option {{period === 'month' ? 'store-option-active' : ''}}" disabled="{{!contextReady}}" data-period="month" bindtap="choosePeriod">按月</button>
+      </view>
+      <button wx:if="{{canViewInsights}}" class="store-link finance-insights" bindtap="openInsights">客群分析 <text class="finance-next" aria-hidden="true">›</text></button>
+    </view>
+  </view>
+  <view wx:if="{{error}}" class="store-card store-state finance-state">
+    <text role="alert">{{error}}</text>
+    <button wx:if="{{needsName}}" class="store-link" bindtap="openAccount">填写员工姓名</button>
+    <button wx:else class="store-link" bindtap="refresh">重新加载</button>
+  </view>
+  <view wx:elif="{{loading && !report}}" class="store-card store-state finance-state">正在加载报表…</view>
+
+  <block wx:if="{{report}}">
+    <view class="finance-amounts">
+      <view class="finance-metric finance-consumption">
+        <text class="finance-metric-caption">已录消费额</text>
+        <text class="finance-metric-value finance-metric-money">{{report.total.amountText}}</text>
+      </view>
+      <button class="finance-metric finance-metric-button {{pendingOnly && !staffId ? 'finance-metric-selected' : ''}}" data-pending-only="{{true}}" bindtap="selectStaff" aria-label="查看全部待补金额的订单">
+        <view class="finance-metric-heading">
+          <text class="finance-metric-caption">金额待补</text>
+          <text class="finance-next" aria-hidden="true">›</text>
+        </view>
+        <text class="finance-metric-value">{{report.total.pending}}<text class="finance-unit"> 笔</text></text>
+      </button>
+    </view>
+    <view class="store-card finance-counts">
+      <view class="finance-count">
+        <text class="store-caption">有效订单</text>
+        <text class="finance-count-value">{{report.total.orderCount}}<text class="finance-unit"> 单</text></text>
+      </view>
+      <view class="finance-count">
+        <text class="store-caption">桌数</text>
+        <text class="finance-count-value">{{report.total.tableCount}}<text class="finance-unit"> 桌</text></text>
+      </view>
+      <view class="finance-count finance-deposit">
+        <text class="store-caption">订金合计</text>
+        <text class="finance-count-value">{{report.total.depositText}}</text>
+      </view>
+    </view>
+
+    <view class="finance-section">
+      <view class="store-heading finance-section-title">员工汇总</view>
+      <view wx:if="{{!report.rows.length}}" class="store-card store-state">暂无有效订单。</view>
+      <view wx:else class="store-card finance-staff-list">
+        <view wx:for="{{report.rows}}" wx:key="staffId" class="finance-staff {{staffId === item.staffId ? 'finance-staff-active' : ''}}">
+          <button class="finance-staff-main" data-staff-id="{{item.staffId}}" bindtap="selectStaff">
+            <view class="finance-staff-info">
+              <text class="finance-staff-name">{{item.name}}</text>
+              <text class="store-caption">{{item.orderCount}} 单 · {{item.tableCount}} 桌</text>
+            </view>
+            <text class="finance-staff-amount">{{item.amountText}}</text>
+          </button>
+          <button class="finance-staff-pending {{item.pending ? 'finance-pending' : ''}} {{staffId === item.staffId && pendingOnly ? 'finance-staff-pending-selected' : ''}}" data-staff-id="{{item.staffId}}" data-pending-only="{{true}}" bindtap="selectStaff" aria-label="{{item.name + '待补 ' + item.pending + ' 笔'}}">待补 {{item.pending}} 笔</button>
+        </view>
+      </view>
+    </view>
+
+    <view class="finance-section" id="report-orders">
+      <view class="finance-section-heading">
+        <view class="finance-section-description">
+          <view class="store-heading">{{selectedStaff ? selectedStaff.name + '的' : ''}}{{pendingOnly ? '待补订单' : (selectedStaff ? '订单' : '订单明细')}}</view>
+          <view wx:if="{{selectedStaff}}" class="store-caption finance-section-summary">{{selectedStaff.orderCount}} 单 · 已录 {{selectedStaff.amountText}}</view>
+        </view>
+        <button wx:if="{{staffId || pendingOnly}}" class="store-link finance-reset" bindtap="selectStaff">查看全部</button>
+      </view>
+      <view wx:if="{{!details.length}}" class="store-card store-state">{{pendingOnly ? '当前范围暂无待补订单。' : '当前范围暂无订单。'}}</view>
+      <button wx:for="{{details}}" wx:key="id" class="store-card finance-order" data-id="{{item.id}}" bindtap="openOrder">
+        <view class="finance-order-heading">
+          <text class="finance-order-staff">{{item.staffName}}</text>
+          <view class="finance-order-status">
+            <text class="finance-status finance-status-{{item.status}}">{{item.statusLabel}}</text>
+            <text class="finance-next" aria-hidden="true">›</text>
+          </view>
+        </view>
+        <view class="finance-order-meta">用餐日 {{item.date}} · {{item.mealLabel}} {{item.time}}</view>
+        <view class="finance-order-meta">{{item.tables}} · {{item.tableCount}} 桌 · {{item.id}}</view>
+        <view class="finance-order-money">
+          <text>消费额 <text class="{{item.amountPending ? 'finance-pending' : 'finance-order-figure'}}">{{item.amountText}}</text></text>
+          <text>订金 <text class="finance-order-figure">{{item.depositText}}</text></text>
+        </view>
+      </button>
+      <button wx:if="{{hasMoreOrders}}" class="store-button store-button-quiet finance-more" bindtap="moreOrders">加载更多</button>
+    </view>
+  </block>
+</view>

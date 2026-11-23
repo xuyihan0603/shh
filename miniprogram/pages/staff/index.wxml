@@ -1,0 +1,35 @@
+<view class="store-page staff-page">
+  <view wx:if="{{notice && notice !== error}}" class="store-error" role="alert">{{notice}}</view>
+  <view wx:if="{{loading}}" class="store-card store-state">正在加载员工权限…</view>
+  <view wx:elif="{{error}}" class="store-card store-state">
+    <view role="alert">{{error}}</view>
+    <button wx:if="{{needsAccount}}" class="store-button store-button-secondary staff-retry" bindtap="openAccount">返回我的</button>
+    <button wx:else class="store-button store-button-secondary staff-retry" disabled="{{saving}}" bindtap="refresh">重新加载</button>
+  </view>
+  <view wx:elif="{{!staff.length}}" class="store-card store-state">暂无员工</view>
+  <view wx:else class="staff-list">
+    <view wx:for="{{staff}}" wx:key="id" class="store-card staff-item {{editId === item.id ? 'staff-item-editing' : ''}}">
+      <view class="staff-summary">
+        <view class="staff-person">
+          <view class="staff-name">{{item.name || '姓名待填写'}}</view>
+          <view wx:if="{{!item.self}}" class="store-caption staff-meta">登记编号 {{item.code}}</view>
+          <text wx:if="{{item.self || item.active === false}}" class="staff-marker {{item.self ? 'staff-self' : ''}}">{{item.self ? '本人' : '已停用'}}</text>
+        </view>
+        <view class="staff-position">
+          <text class="staff-role {{item.role === 'manager' || item.role === 'pending' ? 'staff-role-manager' : ''}}">{{item.roleLabel}}</text>
+          <button wx:if="{{!item.self && editId !== item.id}}" class="store-link staff-edit" data-id="{{item.id}}" bindtap="editRole" disabled="{{saving}}">{{item.role === 'pending' ? '分配职位' : '调整职位'}} <text class="staff-next" aria-hidden="true">›</text></button>
+        </view>
+      </view>
+      <view wx:if="{{editId === item.id}}" class="staff-editor">
+        <view class="store-field-label">新职位</view>
+        <picker mode="selector" range="{{roleOptions}}" range-key="label" value="{{roleIndex < 0 ? 0 : roleIndex}}" data-id="{{item.id}}" disabled="{{saving}}" bindchange="chooseRole">
+          <view class="store-input staff-picker"><text>{{roleIndex < 0 ? '请选择职位' : roleOptions[roleIndex].label}}</text><text class="store-chevron" aria-hidden="true">⌄</text></view>
+        </picker>
+        <view class="staff-actions">
+          <button class="store-button store-button-quiet" disabled="{{saving}}" bindtap="cancelEdit">取消</button>
+          <button class="store-button store-button-primary staff-save" data-id="{{item.id}}" bindtap="saveRole" loading="{{saving}}" disabled="{{saving || roleIndex < 0 || roleIndex === item.roleIndex}}">保存职位</button>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

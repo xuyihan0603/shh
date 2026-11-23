@@ -1,0 +1,15 @@
+**
+!Dockerfile
+!server/
+!server/*.js
+!server/package*.json
+!server/public/
+!server/public/*
+!miniprogram/
+!miniprogram/lib/
+!miniprogram/lib/customer-segments.js
+!miniprogram/lib/domain.js
+!miniprogram/lib/invitation.js
+!miniprogram/lib/pilot.js
+!miniprogram/lib/reception.js
+!miniprogram/lib/workbook.js

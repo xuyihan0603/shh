@@ -1,0 +1,46 @@
+{
+  "pages": [
+    "pages/access/index",
+    "pages/index/index", "pages/orders/index", "pages/finance/index", "pages/account/index",
+    "pages/booking/index", "pages/order/index", "pages/notify/index", "pages/invite/index", "pages/staff/index",
+    "pages/insights/index"
+  ],
+  "subPackages": [
+    {
+      "root": "chat-tool",
+      "pages": ["pages/send/index"],
+      "independent": true,
+      "renderer": "skyline",
+      "componentFramework": "glass-easel"
+    }
+  ],
+  "chatTools": [
+    {
+      "root": "chat-tool",
+      "entryPagePath": "pages/send/index",
+      "desc": "发送预订通知文字"
+    }
+  ],
+  "rendererOptions": {
+    "skyline": {
+      "disableABTest": true,
+      "defaultDisplayBlock": true,
+      "defaultContentBox": true
+    }
+  },
+  "window": {
+    "navigationBarTitleText": "珊瑚海预订", "navigationBarBackgroundColor": "#103947",
+    "navigationBarTextStyle": "white", "backgroundColor": "#F6F4EE"
+  },
+  "tabBar": {
+    "color": "#66767B", "selectedColor": "#103947", "backgroundColor": "#FFFFFF", "borderStyle": "white",
+    "list": [
+      {"pagePath":"pages/index/index","text":"桌态","iconPath":"assets/board.png","selectedIconPath":"assets/board-on.png"},
+      {"pagePath":"pages/orders/index","text":"订单","iconPath":"assets/orders.png","selectedIconPath":"assets/orders-on.png"},
+      {"pagePath":"pages/finance/index","text":"日报","iconPath":"assets/report.png","selectedIconPath":"assets/report-on.png"},
+      {"pagePath":"pages/account/index","text":"我的","iconPath":"assets/account.png","selectedIconPath":"assets/account-on.png"}
+    ]
+  },
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

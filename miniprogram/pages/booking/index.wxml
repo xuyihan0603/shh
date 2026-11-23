@@ -1,0 +1,141 @@
+<view class="rec-page">
+  <view class="rec-body {{!contextLoading && !contextError ? 'rec-body-with-dock' : ''}}">
+    <view wx:if="{{contextLoading}}" class="rec-state">正在读取预订资料…</view>
+    <view wx:elif="{{contextError}}" class="rec-state">
+      <view>{{contextError}}</view>
+      <button wx:if="{{needsName}}" class="rec-button rec-secondary" bindtap="openAccount">填写员工姓名</button>
+      <button wx:elif="{{forbidden}}" class="rec-button rec-secondary" bindtap="goBack">返回</button>
+      <button wx:else class="rec-button rec-secondary" bindtap="loadContext">重新加载</button>
+    </view>
+    <block wx:else>
+      <view wx:if="{{staleVersion}}" class="rec-alert booking-version">
+        <view>订单已由其他员工更新。表单仍在，请返回详情核对最新记录后再编辑。</view>
+        <button class="rec-text-button" bindtap="goBack">查看最新订单</button>
+      </view>
+
+      <view class="rec-panel booking-panel">
+        <view class="rec-title">用餐安排</view>
+        <view class="booking-staff">
+          <text class="booking-label">{{isWalkIn ? '登记员工' : '预订员工'}}</text>
+          <text class="booking-staff-name">{{bookingStaffName}}</text>
+        </view>
+        <view class="booking-row">
+          <text class="booking-label">用餐日期</text>
+          <picker wx:if="{{!isWalkIn}}" class="booking-value" mode="date" value="{{form.date}}" bindchange="pickDate" disabled="{{saving}}">
+            <view class="booking-picker">{{dateLabel}}<text class="booking-arrow">›</text></view>
+          </picker>
+          <text wx:else class="booking-value">{{dateLabel}}</text>
+        </view>
+        <view class="booking-row">
+          <text class="booking-label">餐段</text>
+          <view class="booking-meals">
+            <button class="rec-chip {{form.meal === 'lunch' ? 'rec-chip-active' : ''}}" data-meal="lunch" bindtap="pickMeal" disabled="{{saving}}">午餐</button>
+            <button class="rec-chip {{form.meal === 'dinner' ? 'rec-chip-active' : ''}}" data-meal="dinner" bindtap="pickMeal" disabled="{{saving}}">晚餐</button>
+          </view>
+        </view>
+        <view wx:if="{{!isWalkIn}}" class="booking-row">
+          <text class="booking-label">到店时间</text>
+          <picker class="booking-value" mode="time" value="{{form.time || timeDefault}}" bindchange="pickTime" disabled="{{saving}}">
+            <view class="booking-picker {{form.time ? '' : 'rec-placeholder'}}">{{form.time || '选择时间'}}<text class="booking-arrow">›</text></view>
+          </picker>
+        </view>
+        <view class="booking-row">
+          <text class="booking-label">用餐人数</text>
+          <view class="booking-people">
+            <input class="rec-input booking-count" type="number" maxlength="16" data-field="guests" value="{{form.guests}}" placeholder="填写人数" placeholder-class="rec-placeholder" bindinput="changeField" disabled="{{saving}}" />
+            <text>人</text>
+          </view>
+        </view>
+      </view>
+
+      <view id="booking-tables" class="rec-panel booking-panel">
+        <view class="rec-between booking-panel-head">
+          <view class="rec-title">桌位</view>
+          <button class="rec-text-button" bindtap="toggleTables">{{showTables ? '收起' : '选择桌位'}}</button>
+        </view>
+        <view wx:if="{{selectedNames}}" class="booking-selected">
+          <text>{{selectedNames}}</text>
+          <text class="rec-muted">{{form.tableIds.length}} 桌 · {{missingCapacity ? '容量待补' : '共 ' + selectedCapacity + ' 座'}}</text>
+        </view>
+        <view wx:elif="{{!boardLoading && !boardError}}" class="rec-muted">尚未选桌</view>
+        <view wx:if="{{tableConflict}}" class="rec-alert booking-conflict">{{tableConflict}}</view>
+        <block wx:if="{{showTables}}">
+          <view wx:if="{{boardLoading}}" class="rec-state booking-table-state">正在查看桌位…</view>
+          <view wx:elif="{{boardError}}" class="rec-state booking-table-state">
+            <view>{{boardError}}</view>
+            <button class="rec-button rec-secondary" bindtap="loadBoard">重试</button>
+          </view>
+          <block wx:else>
+            <scroll-view wx:if="{{floors.length > 2}}" scroll-x class="rec-chip-strip booking-floors" aria-label="楼层">
+              <button wx:for="{{floors}}" wx:key="id" class="rec-chip {{floor === item.id ? 'rec-chip-active' : ''}}" data-id="{{item.id}}" bindtap="pickFloor">{{item.label}}</button>
+            </scroll-view>
+            <view wx:if="{{!visibleTables.length}}" class="rec-state booking-table-state">没有桌位</view>
+            <view wx:else class="booking-grid">
+              <button wx:for="{{visibleTables}}" wx:key="id" data-id="{{item.id}}" bindtap="selectTable" disabled="{{saving || !item.available}}" class="booking-table {{item.selected ? 'booking-table-selected' : ''}} {{item.available ? '' : 'booking-table-busy'}} {{item.status === 'booked' ? 'booking-table-booked' : ''}}">
+                <text class="booking-table-name">{{item.name}}</text>
+                <text class="booking-table-meta">{{item.selected ? '已选 · ' : ''}}{{item.available ? item.capacityLabel : item.statusLabel}}</text>
+                <text wx:if="{{item.status === 'booked' && item.ownerName}}" class="booking-table-owner">{{item.ownerName}}</text>
+              </button>
+            </view>
+          </block>
+        </block>
+      </view>
+
+      <view class="rec-panel booking-panel">
+        <view class="rec-between booking-panel-head">
+          <view class="rec-title">客人信息</view>
+          <text wx:if="{{isWalkIn}}" class="rec-muted">选填</text>
+        </view>
+        <view class="booking-row">
+          <text class="booking-label">联系电话</text>
+          <input class="rec-input booking-value" type="number" maxlength="16" value="{{form.phone}}" placeholder="输入号码" placeholder-class="rec-placeholder" bindinput="changePhone" bindblur="lookupCustomer" bindconfirm="lookupCustomer" disabled="{{saving}}" />
+        </view>
+        <view wx:if="{{customer}}" class="booking-visit">
+          <text class="rec-muted">累计到店 {{customer.visits}} 次</text>
+          <text wx:if="{{customer.segment}}" class="rec-status rec-segment-{{customer.segment.id}}">{{customer.segment.label}}</text>
+        </view>
+        <view class="booking-row">
+          <text class="booking-label">客人姓名</text>
+          <input class="rec-input booking-value" type="text" maxlength="-1" data-field="contact" value="{{form.contact}}" placeholder="输入姓名" placeholder-class="rec-placeholder" bindinput="changeField" disabled="{{saving}}" />
+        </view>
+        <view class="booking-note">
+          <text class="booking-label">备注</text>
+          <textarea class="rec-input booking-notes-input" auto-height maxlength="-1" cursor-spacing="88" data-field="notes" value="{{form.notes}}" placeholder="选填" placeholder-class="rec-placeholder" bindinput="changeField" disabled="{{saving}}" />
+        </view>
+      </view>
+
+      <view wx:if="{{!isWalkIn || form.deposit}}" class="rec-panel booking-panel">
+        <view class="rec-between booking-panel-head">
+          <view class="rec-title">订金</view>
+          <button class="rec-text-button" bindtap="toggleDeposit">{{showDeposit ? '收起' : (form.deposit ? '查看订金' : '登记订金')}}</button>
+        </view>
+        <block wx:if="{{showDeposit}}">
+          <view class="booking-row">
+            <text class="booking-label">实收金额</text>
+            <view class="booking-people booking-deposit-entry">
+              <input class="rec-input booking-count" type="digit" cursor-spacing="88" data-field="deposit" value="{{form.deposit}}" placeholder="0.00" placeholder-class="rec-placeholder" bindinput="changeField" disabled="{{saving}}" />
+              <text>元</text>
+            </view>
+          </view>
+          <view class="booking-row">
+            <text class="booking-label">收款方式</text>
+            <input class="rec-input booking-value" cursor-spacing="88" maxlength="-1" data-field="depositMethod" value="{{form.depositMethod}}" placeholder="如微信、现金" placeholder-class="rec-placeholder" bindinput="changeField" disabled="{{saving}}" />
+          </view>
+          <view class="booking-row">
+            <text class="booking-label">经手人</text>
+            <input class="rec-input booking-value" cursor-spacing="88" maxlength="-1" data-field="depositHandler" value="{{form.depositHandler}}" placeholder="输入经手人姓名" placeholder-class="rec-placeholder" bindinput="changeField" disabled="{{saving}}" />
+          </view>
+        </block>
+        <view wx:elif="{{form.deposit}}" class="booking-deposit-brief">
+          <text class="booking-deposit-amount">¥{{form.deposit}}</text>
+          <text class="rec-muted">{{form.depositMethod}}</text>
+        </view>
+      </view>
+      <view wx:if="{{formError}}" class="rec-alert booking-validation">{{formError}}</view>
+    </block>
+  </view>
+
+  <view wx:if="{{!contextLoading && !contextError}}" class="rec-dock booking-dock">
+    <button class="rec-button rec-primary rec-grow" loading="{{saving}}" disabled="{{saving || boardLoading || boardError || staleVersion}}" bindtap="save">{{editing ? '保存修改' : (isWalkIn ? '确认到店' : '确认预订')}}</button>
+  </view>
+</view>

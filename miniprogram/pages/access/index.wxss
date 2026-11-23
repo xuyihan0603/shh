@@ -1,0 +1,23 @@
+@import "../../styles/settings.wxss";
+
+.access-page { display: flex; flex-direction: column; gap: 18rpx; }
+.access-header {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  padding: 26rpx;
+  border-top: 3rpx solid var(--store-bronze);
+  border-radius: 22rpx;
+  background: var(--store-deep);
+  color: #fff;
+}
+.access-logo { flex-shrink: 0; width: 122rpx; height: 110rpx; border-radius: 12rpx; background: #fff; }
+.access-store { font-size: 37rpx; font-weight: 700; line-height: 1.3; }
+.access-environment { margin-top: 5rpx; color: #f0dcb8; font-size: 24rpx; }
+.access-description { margin: 9rpx 0 18rpx; }
+.access-registration { padding: 15rpx 18rpx; border-radius: 12rpx; background: var(--store-sea); }
+.access-field { margin-top: 18rpx; }
+.access-submit { margin-top: 18rpx; }
+.access-action { width: 100%; }
+.access-admin-actions { display: flex; gap: 14rpx; margin-top: 18rpx; }
+.access-admin-actions .store-button { flex: 1; }

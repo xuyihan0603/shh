@@ -1,0 +1,72 @@
+<view class="rec-page">
+  <view class="rec-body">
+    <view wx:if="{{canLookup}}" class="rec-panel orders-lookup">
+      <text class="orders-label">来电查询</text>
+      <view class="orders-lookup-row">
+        <input class="rec-input orders-phone" type="number" maxlength="16" aria-label="联系电话" placeholder="输入联系电话" placeholder-class="rec-placeholder" confirm-type="search" value="{{phoneDraft}}" bindinput="changePhone" bindconfirm="searchPhone" />
+        <button class="rec-button rec-primary" bindtap="searchPhone">查询</button>
+      </view>
+      <button wx:if="{{queryPhone}}" class="rec-text-button orders-reset" bindtap="resetSearch">返回用餐订单</button>
+    </view>
+
+    <view wx:if="{{contextReady && !queryPhone}}" class="rec-panel orders-filters">
+      <view wx:if="{{canViewAll}}" class="orders-date-scopes">
+        <button class="rec-chip {{allDates ? 'rec-chip-active' : ''}}" data-scope="all" bindtap="pickDateScope">全部日期</button>
+        <button class="rec-chip {{allDates ? '' : 'rec-chip-active'}}" data-scope="day" bindtap="pickDateScope">按用餐日</button>
+      </view>
+      <picker wx:if="{{!allDates}}" class="orders-date-picker" mode="date" value="{{date}}" bindchange="pickDate">
+        <view class="rec-between orders-date"><text>用餐日</text><text class="orders-date-value">{{dateLabel}}<text class="orders-caret">⌄</text></text></view>
+      </picker>
+      <view class="orders-meals">
+        <button wx:for="{{meals}}" wx:key="id" class="rec-chip {{meal === item.id ? 'rec-chip-active' : ''}}" data-meal="{{item.id}}" bindtap="pickMeal">{{item.label}}</button>
+      </view>
+    </view>
+
+    <view wx:if="{{loading}}" class="rec-state orders-state">正在读取订单…</view>
+    <view wx:elif="{{error}}" class="rec-state orders-state">
+      <view>{{error}}</view>
+      <button wx:if="{{needsName}}" class="rec-button rec-secondary" bindtap="openAccount">填写员工姓名</button>
+      <button wx:else class="rec-button rec-secondary" bindtap="retry">重新加载</button>
+    </view>
+
+    <block wx:else>
+      <view wx:if="{{queryPhone}}" class="rec-panel orders-customer">
+        <view class="orders-customer-info">
+          <view class="orders-customer-name">
+            <text>{{customer && customer.visits ? (customer.contact || '未登记姓名') : '暂无到店记录'}}</text>
+            <text wx:if="{{customer && customer.segment}}" class="rec-status rec-segment-{{customer.segment.id}}">{{customer.segment.label}}</text>
+          </view>
+          <text class="rec-muted">{{customer ? customer.phone : queryPhone}}{{customer && customer.visits ? ' · 累计到店 ' + customer.visits + ' 次' : ''}}</text>
+        </view>
+        <button class="rec-button rec-primary" bindtap="useCustomer">代客预订</button>
+      </view>
+      <view class="rec-between orders-heading">
+        <text class="rec-title">{{queryPhone ? '来电历史' : (allDates ? '全店订单' : '用餐订单')}}</text>
+        <text class="rec-muted">{{total}} 笔</text>
+      </view>
+      <view wx:if="{{!orders.length}}" class="rec-state">{{queryPhone ? '该号码暂无可查看的订单' : '没有符合筛选条件的订单'}}</view>
+      <button wx:for="{{orders}}" wx:key="id" class="rec-panel orders-card" data-id="{{item.id}}" bindtap="openOrder">
+        <view class="rec-between orders-card-head">
+          <text class="orders-contact">{{item.contact || item.kindLabel}}</text>
+          <text class="rec-status rec-status-{{item.status}}">{{item.statusLabel}}</text>
+        </view>
+        <view class="orders-seating">
+          <text>{{queryPhone || allDates ? item.dateLabel + ' · ' : ''}}{{item.mealLabel}} {{item.time}} · {{item.guests}} 人</text>
+          <text wx:if="{{item.tableLabel}}" class="orders-tables">{{item.tableLabel}}</text>
+        </view>
+        <view class="orders-foot">
+          <view class="orders-owner">
+            <text>{{item.kind === 'walkin' ? '散客登记' : '接单员工'}}</text>
+            <text class="orders-owner-name">{{item.ownerName}}</text>
+          </view>
+          <text wx:if="{{item.deposit > 0}}" class="orders-deposit">订金 ¥{{item.deposit}}</text>
+        </view>
+        <text wx:if="{{item.phone && !queryPhone}}" class="orders-card-phone">{{item.phone}}</text>
+      </button>
+      <view wx:if="{{next}}" class="orders-pagination">
+        <view wx:if="{{moreError}}" class="rec-alert">{{moreError}}</view>
+        <button class="rec-button rec-secondary" bindtap="loadMore" disabled="{{loadingMore}}" loading="{{loadingMore}}">{{moreError ? '重试加载' : '加载更多'}}</button>
+      </view>
+    </block>
+  </view>
+</view>

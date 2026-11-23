@@ -1,0 +1,41 @@
+<view class="store-page access-page">
+  <view class="access-header">
+    <image class="access-logo" src="/assets/coral-logo.jpg" mode="aspectFit" aria-label="珊瑚海商标" />
+    <view>
+      <view class="access-store">{{storeName || '珊瑚海'}}</view>
+      <view class="access-environment">测试门店</view>
+    </view>
+  </view>
+  <view wx:if="{{error}}" class="store-error" role="alert">{{error}}</view>
+  <view wx:if="{{!me && checking}}" class="store-card store-state">正在确认微信身份…</view>
+  <button wx:elif="{{!me}}" class="store-button store-button-secondary" bindtap="refresh">重新连接</button>
+  <block wx:else>
+    <view class="store-card">
+      <view class="store-heading">等待分配权限</view>
+      <view class="store-caption access-description">{{me.nameBound ? '请把姓名和登记编号发给店长。权限分配后，刷新即可进入。' : '请填写姓名，再把登记编号发给店长分配权限。'}}</view>
+      <view class="access-registration">
+        <view wx:if="{{me.nameBound}}">{{me.name}}</view>
+        <view>登记编号 <text user-select>{{code}}</text></view>
+      </view>
+      <view wx:if="{{!me.nameBound}}" class="access-field">
+        <text class="store-field-label">员工姓名</text>
+        <input class="store-input" placeholder="请输入本人姓名" placeholder-class="store-placeholder" aria-label="员工姓名" value="{{name}}" data-name="name" bindinput="field" maxlength="40" disabled="{{busy || checking}}" />
+        <button class="store-button store-button-primary access-submit" disabled="{{busy || checking || !name}}" bindtap="saveName">保存姓名</button>
+      </view>
+      <button class="store-button store-button-secondary access-submit" loading="{{checking}}" disabled="{{busy || checking}}" bindtap="refresh">刷新权限</button>
+    </view>
+    <view wx:if="{{canBindAdmin}}">
+      <button wx:if="{{!showAdmin}}" class="store-button store-button-quiet access-action" disabled="{{busy || checking}}" bindtap="toggleAdmin">首次绑定管理员</button>
+      <view wx:else class="store-card">
+        <view class="store-heading">首次绑定管理员</view>
+        <view class="store-caption access-description">使用测试门店的管理口令，把管理员权限绑定到当前微信。</view>
+        <text class="store-field-label">管理口令</text>
+        <input class="store-input" password aria-label="管理口令" placeholder="请输入管理口令" placeholder-class="store-placeholder" value="{{password}}" data-name="password" bindinput="field" maxlength="128" disabled="{{busy || checking}}" />
+        <view class="access-admin-actions">
+          <button class="store-button store-button-quiet" disabled="{{busy}}" bindtap="toggleAdmin">取消</button>
+          <button class="store-button store-button-primary" disabled="{{busy || checking || !password}}" bindtap="bindAdmin">确认绑定</button>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

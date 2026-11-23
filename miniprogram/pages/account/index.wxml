@@ -1,0 +1,38 @@
+<view class="store-page account-page">
+  <view class="account-header">
+    <image class="account-logo" src="/assets/coral-logo.jpg" mode="aspectFit" aria-label="珊瑚海商标" />
+    <view class="account-identity">
+      <view class="account-mode">测试门店</view>
+      <view class="account-store-name">{{store ? store.name : '珊瑚海'}}</view>
+      <view wx:if="{{me}}" class="account-role">{{me.nameBound ? me.name + ' · ' : ''}}{{role}}</view>
+      <view wx:if="{{store.address}}" class="account-detail">{{store.address}}</view>
+      <view wx:if="{{store.phone}}" class="account-detail">{{store.phone}}</view>
+    </view>
+  </view>
+  <view wx:if="{{error}}" class="store-error" role="alert">{{error}}</view>
+  <view wx:if="{{loading}}" class="store-card store-state">正在加载员工资料…</view>
+  <button wx:elif="{{!me}}" class="store-button store-button-secondary" bindtap="refresh">重新加载</button>
+  <view wx:elif="{{!me.nameBound}}" class="store-card">
+    <view class="store-heading">{{bookingStaff ? '绑定员工资料' : '绑定员工姓名'}}</view>
+    <view class="store-caption account-description">{{bookingStaff ? '姓名用于记录接单人。服务手机号会显示在发给客人的预订通知中。' : '请填写并确认本人姓名。'}}</view>
+    <view class="account-field">
+      <text class="store-field-label">员工姓名</text>
+      <input class="store-input" placeholder="请输入本人姓名" placeholder-class="store-placeholder" aria-label="员工姓名" value="{{name}}" data-name="name" bindinput="field" maxlength="40" disabled="{{busy}}" />
+    </view>
+    <view wx:if="{{bookingStaff}}" class="account-field">
+      <text class="store-field-label">服务手机号</text>
+      <input class="store-input" placeholder="请输入服务手机号" placeholder-class="store-placeholder" aria-label="服务手机号" value="{{servicePhone}}" data-name="servicePhone" bindinput="field" maxlength="24" disabled="{{busy}}" />
+    </view>
+    <button class="store-button store-button-primary account-submit" loading="{{busy}}" disabled="{{busy || !name}}" bindtap="saveProfile">{{bookingStaff ? '确认员工资料' : '确认姓名'}}</button>
+  </view>
+  <view wx:elif="{{bookingStaff}}" class="store-card">
+    <view class="store-heading">服务手机号</view>
+    <view class="store-caption account-description">此号码用于预订通知，客人可通过它联系接单人。</view>
+    <input class="store-input" placeholder="请输入手机号" placeholder-class="store-placeholder" aria-label="服务手机号" value="{{servicePhone}}" data-name="servicePhone" bindinput="field" maxlength="24" disabled="{{busy}}" />
+    <button class="store-button store-button-primary account-submit" loading="{{busy}}" disabled="{{busy || servicePhone === (me.servicePhone || '')}}" bindtap="saveProfile">保存手机号</button>
+  </view>
+  <button wx:if="{{me && me.nameBound && me.role === 'manager'}}" class="store-card staff-entry" disabled="{{busy}}" bindtap="openStaffRoles">
+    <text>员工权限</text>
+    <text class="account-next" aria-hidden="true">›</text>
+  </button>
+</view>

@@ -1,0 +1,78 @@
+<view class="rec-page">
+  <view class="rec-body">
+    <view wx:if="{{loading}}" class="rec-state">正在读取预订…</view>
+    <view wx:elif="{{error}}" class="rec-state">
+      <view>{{error}}</view>
+      <button wx:if="{{needsName}}" class="rec-button rec-secondary" bindtap="openAccount">填写员工姓名</button>
+      <button wx:elif="{{id}}" class="rec-button rec-secondary" bindtap="load">重新读取</button>
+    </view>
+    <block wx:elif="{{card}}">
+      <view wx:if="{{!card.servicePhone}}" class="rec-alert notify-notice">
+        {{card.serviceName || '原接单员工'}}的服务手机号未设置。请原接单员工到「我的 → 服务手机号」填写，也可请店长补全。
+      </view>
+      <view wx:if="{{!smsOnly}}" class="rec-panel notify-panel">
+        <view class="rec-title">消息正文</view>
+        <text class="notify-message" user-select>{{message}}</text>
+        <button wx:if="{{canOpenChat}}" class="rec-button rec-primary notify-action" loading="{{chatOpening}}" disabled="{{chatOpening}}" bindtap="openChat">选择微信联系人</button>
+        <button class="rec-button notify-action {{canOpenChat ? 'rec-secondary' : 'rec-primary'}}" bindtap="copy">复制预订消息</button>
+        <view wx:if="{{copyStatus === 'success'}}" class="notify-success">已复制，打开微信好友或群聊，长按输入框粘贴并发送</view>
+        <view wx:elif="{{copyStatus === 'failed'}}" class="rec-alert notify-feedback">复制失败，可长按上方预订消息手动复制。</view>
+        <view wx:elif="{{chatNotice || !canOpenChat}}" class="rec-muted notify-hint">{{chatNotice || '当前微信无法打开聊天列表，可复制预订消息后粘贴发送。'}}</view>
+      </view>
+      <block wx:else>
+        <view class="rec-panel notify-panel">
+          <view class="rec-title">收件人手机号</view>
+          <view class="notify-recipient">
+            <text class="notify-phone" user-select>{{phone || '未登记手机号'}}</text>
+            <button wx:if="{{phone}}" class="rec-button rec-secondary notify-copy" disabled="{{copyStatus === 'copying' || !!opening || sending}}" bindtap="copy" data-field="phone">复制号码</button>
+          </view>
+          <view wx:if="{{!phone}}" class="rec-muted notify-hint">请在订单中补充手机号。</view>
+          <block wx:elif="{{smsMode === 'full'}}">
+            <button class="rec-button rec-primary notify-action" loading="{{opening === 'full'}}" disabled="{{copyStatus === 'copying' || !!opening || sending}}" bindtap="compose">打开手机短信</button>
+            <view class="rec-muted notify-hint">号码和正文会一起带入，请在手机短信中核对并发送。</view>
+            <button class="rec-button rec-secondary notify-action" disabled="{{copyStatus === 'copying' || !!opening || sending}}" bindtap="copyForNumberOnly" data-field="message">复制正文，使用兼容方式</button>
+          </block>
+          <block wx:elif="{{smsMode === 'number'}}">
+            <view class="rec-muted notify-hint">复制完整正文后打开短信，长按输入框粘贴并发送。</view>
+            <button class="rec-button notify-action {{smsCopied === 'message' ? 'rec-secondary' : 'rec-primary'}}" disabled="{{copyStatus === 'copying' || !!opening || sending}}" bindtap="copy" data-field="message">复制完整正文</button>
+            <button class="rec-button rec-primary notify-action" disabled="{{smsCopied !== 'message' || !!opening || sending}}" loading="{{opening === 'number'}}" bindtap="compose">打开短信并粘贴</button>
+          </block>
+          <block wx:else>
+            <view wx:if="{{!canCompose}}" class="rec-muted notify-hint">当前微信环境无法直接打开手机短信。</view>
+            <view class="rec-muted notify-hint">复制号码后，在手机短信应用中新建短信并粘贴收件人。回到本页复制完整正文，再切回短信粘贴并发送。</view>
+            <button class="rec-button rec-primary notify-action" disabled="{{copyStatus === 'copying' || !!opening || sending}}" bindtap="copy" data-field="message">复制完整正文</button>
+            <button wx:if="{{canCompose}}" class="rec-button rec-secondary notify-action" disabled="{{smsCopied !== 'message' || !!opening || sending}}" loading="{{opening === 'number'}}" bindtap="compose">重试打开短信</button>
+          </block>
+          <view wx:if="{{smsCopied === 'phone'}}" class="notify-success">已复制客人号码。</view>
+          <view wx:elif="{{smsCopied === 'message'}}" class="notify-success">已复制整段预订正文，可粘贴到短信。</view>
+          <view wx:if="{{copyStatus === 'failed'}}" class="rec-alert notify-feedback">复制失败。可长按号码或完整正文手动复制，再打开手机短信应用粘贴。</view>
+          <view wx:if="{{smsHint}}" class="rec-muted notify-hint">{{smsHint}}</view>
+          <text wx:if="{{smsDiagnostic}}" class="rec-muted notify-diagnostic" user-select>微信错误（{{smsDiagnostic}}）</text>
+        </view>
+        <view wx:if="{{phone && canCompose && smsMode !== 'full' && shortSms.message}}" class="rec-panel notify-panel">
+          <view class="rec-title">精简短信</view>
+          <text class="notify-message" user-select>{{shortSms.message}}</text>
+          <view wx:if="{{shortSms.note}}" class="rec-muted notify-hint">{{shortSms.note}}</view>
+          <button class="rec-button rec-secondary notify-action" disabled="{{copyStatus === 'copying' || !!opening || sending}}" loading="{{opening === 'short'}}" bindtap="composeShort">发送精简短信</button>
+          <view class="rec-muted notify-hint">会带入号码和精简正文，请在手机短信中发送。</view>
+        </view>
+        <view class="rec-panel notify-panel">
+          <view class="rec-title">完整短信正文</view>
+          <text class="notify-message" user-select>{{message}}</text>
+          <button wx:if="{{!phone}}" class="rec-button rec-secondary notify-action" disabled="{{copyStatus === 'copying'}}" bindtap="copy" data-field="message">复制完整正文</button>
+        </view>
+        <view wx:if="{{cloudEnabled || cloudStatus === 'accepted' || cloudStatus === 'pending' || cloudNote}}" class="rec-panel notify-panel">
+          <view class="rec-title">门店短信服务</view>
+          <view wx:if="{{cloudStatus === 'accepted'}}" class="notify-success">短信平台已受理本次预订通知。</view>
+          <view wx:elif="{{cloudStatus === 'pending'}}" class="rec-alert notify-feedback">短信受理结果待核对，请先在门店短信平台查询。</view>
+          <block wx:elif="{{cloudEnabled}}">
+            <view class="rec-muted notify-hint">{{cloudFields}}</view>
+            <button class="rec-button rec-secondary notify-action" loading="{{sending}}" disabled="{{sending || !!opening}}" bindtap="sendCloud">用门店短信发送</button>
+          </block>
+          <view wx:else class="rec-muted notify-hint">{{cloudNote}}</view>
+        </view>
+        <view wx:if="{{notice}}" class="rec-alert notify-feedback">{{notice}}</view>
+      </block>
+    </block>
+  </view>
+</view>

@@ -1,0 +1,28 @@
+[Unit]
+Description=Shan Hu Hai restaurant booking service
+After=network.target
+
+[Service]
+Type=simple
+User=shh-booking
+Group=shh-booking
+WorkingDirectory=/opt/shh-booking/current
+ExecStart=/opt/shh-booking/node/bin/node /opt/shh-booking/current/server/index.js
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=PORT=8443
+Environment=STORE_DATA_DIR=/var/lib/shh-booking
+Environment=TLS_CERT_FILE=/etc/shh-booking/tls/fullchain.pem
+Environment=TLS_KEY_FILE=/etc/shh-booking/tls/privkey.pem
+StateDirectory=shh-booking
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

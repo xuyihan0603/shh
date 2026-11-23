@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "接待台",
+  "navigationBarBackgroundColor": "#103947",
+  "navigationBarTextStyle": "white",
+  "enablePullDownRefresh": true,
+  "backgroundColorTop": "#103947",
+  "backgroundColorBottom": "#F6F4EE",
+  "backgroundTextStyle": "light"
+}

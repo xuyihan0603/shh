@@ -1,0 +1,93 @@
+<view class="rec-page">
+  <view class="board-hero">
+    <image class="board-hero-image" src="/assets/coral-tide.jpg" mode="aspectFill" aria-hidden="{{true}}" />
+    <view class="board-brand">
+      <view class="board-emblem">
+        <image class="board-emblem-image" src="/assets/coral-logo.jpg" mode="aspectFit" aria-hidden="{{true}}" />
+      </view>
+      <view class="board-identity">
+        <view class="board-store">{{storeName}}</view>
+        <view wx:if="{{roleLabel}}" class="board-identity-meta">
+          <text class="board-role">{{roleLabel}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view class="rec-body board-body {{canCreate ? 'rec-body-with-dock' : ''}}">
+    <view class="rec-panel board-controls">
+      <view class="rec-row board-date">
+        <button class="board-date-arrow" aria-label="前一天" data-days="-1" bindtap="stepDate">
+          <view class="board-arrow board-arrow-previous" />
+        </button>
+        <picker class="board-date-picker" mode="date" value="{{date}}" bindchange="pickDate">
+          <view class="board-date-label">
+            <text class="board-date-text">{{dateLabel}}</text>
+            <view class="board-caret" />
+          </view>
+        </picker>
+        <button class="board-date-arrow" aria-label="后一天" data-days="1" bindtap="stepDate">
+          <view class="board-arrow" />
+        </button>
+        <button wx:if="{{date !== today}}" class="rec-text-button board-today" bindtap="resetDate">回今天</button>
+      </view>
+      <view class="board-meals">
+        <button class="board-meal {{meal === 'lunch' ? 'board-meal-active' : ''}}" data-meal="lunch" bindtap="pickMeal">午餐</button>
+        <button class="board-meal {{meal === 'dinner' ? 'board-meal-active' : ''}}" data-meal="dinner" bindtap="pickMeal">晚餐</button>
+      </view>
+    </view>
+
+    <view class="rec-panel board-summary">
+      <view class="board-metric">
+        <text class="board-metric-value">{{loading || error ? '–' : guestCount}}</text>
+        <text class="board-metric-label">当餐人数</text>
+      </view>
+      <view class="board-metric">
+        <text class="board-metric-value board-metric-free">{{loading || error ? '–' : availableCount}}</text>
+        <text class="board-metric-label">空桌</text>
+      </view>
+      <view class="board-metric">
+        <text class="board-metric-value board-metric-taken">{{loading || error ? '–' : occupiedCount}}</text>
+        <text class="board-metric-label">已占桌</text>
+      </view>
+    </view>
+
+    <view class="rec-between board-heading">
+      <text class="rec-title">桌位</text>
+      <view class="board-types" wx:if="{{!loading && !error}}">
+        <button wx:for="{{types}}" wx:key="id" class="board-type {{type === item.id ? 'board-type-active' : ''}}" data-id="{{item.id}}" bindtap="pickType">{{item.label}}</button>
+      </view>
+    </view>
+    <view wx:if="{{loading}}" class="rec-state">正在查看桌位…</view>
+    <view wx:elif="{{error}}" class="rec-state">
+      <view>{{error}}</view>
+      <button wx:if="{{needsName}}" class="rec-button rec-secondary" bindtap="openAccount">填写员工姓名</button>
+      <button wx:else class="rec-button rec-secondary" bindtap="refresh">重新加载</button>
+    </view>
+    <block wx:else>
+      <scroll-view wx:if="{{floors.length > 2}}" scroll-x class="rec-chip-strip board-floors" aria-label="楼层">
+        <button wx:for="{{floors}}" wx:key="id" class="rec-chip {{floor === item.id ? 'rec-chip-active' : ''}}" data-id="{{item.id}}" bindtap="pickFloor">{{item.label}}</button>
+      </scroll-view>
+      <view wx:if="{{!visibleTables.length}}" class="rec-state">当前筛选下没有桌位</view>
+      <view wx:else class="board-grid">
+        <button wx:for="{{visibleTables}}" wx:key="id" class="board-desk board-desk-{{item.status}} {{item.selected ? 'board-desk-selected' : ''}}" data-id="{{item.id}}" bindtap="tapTable" disabled="{{item.available && !canCreate}}">
+          <view class="board-desk-name">{{item.name}}</view>
+          <view wx:if="{{item.deskMeta}}" class="board-desk-meta">{{item.deskMeta}}</view>
+          <view class="board-desk-footer">
+            <view class="rec-status rec-status-{{item.status}}">{{item.selected ? '已选' : item.statusLabel}}</view>
+            <text wx:if="{{item.status === 'booked' && item.ownerName}}" class="board-desk-owner">{{item.ownerName}}</text>
+          </view>
+        </button>
+      </view>
+    </block>
+  </view>
+
+  <view wx:if="{{canCreate}}" class="rec-dock board-dock">
+    <view class="board-selection">
+      <text class="board-selection-title">{{selectedIds.length ? '已选 ' + selectedIds.length + ' 桌' : '选择空桌'}}</text>
+      <text wx:if="{{selectedLabel}}" class="board-selection-detail">{{selectedLabel}}</text>
+    </view>
+    <button wx:if="{{canRegister && date === today}}" class="rec-button rec-secondary" data-kind="walkin" bindtap="openBooking" disabled="{{loading || error}}">散客到店</button>
+    <button class="rec-button rec-primary board-booking-button" data-kind="booking" bindtap="openBooking" disabled="{{loading || error}}">新建预订</button>
+  </view>
+</view>

@@ -1,0 +1,196 @@
+@import "../../lib/reception.wxss";
+
+.orders-label {
+  display: block;
+  margin-bottom: 12rpx;
+  color: #103947;
+  font-size: 28rpx;
+  font-weight: 650;
+}
+
+.orders-lookup,
+.orders-filters,
+.orders-customer {
+  margin-bottom: 18rpx;
+}
+
+.orders-lookup-row,
+.orders-date-scopes,
+.orders-meals {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.orders-lookup-row .rec-button,
+.orders-customer .rec-button {
+  flex-shrink: 0;
+}
+
+.orders-phone {
+  flex: 1;
+  min-width: 0;
+  min-height: 70rpx;
+}
+
+.orders-reset {
+  margin-top: 8rpx;
+  padding-left: 0;
+}
+
+.orders-date {
+  gap: 10rpx;
+  min-height: 60rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 12rpx;
+  background: #e8f1f1;
+  color: #405b63;
+  font-size: 26rpx;
+}
+
+.orders-date-value {
+  color: #103947;
+  font-size: 28rpx;
+  font-weight: 650;
+}
+
+.orders-caret {
+  margin-left: 12rpx;
+  color: #45636b;
+}
+
+.orders-meals {
+  margin-top: 15rpx;
+}
+
+.orders-date-scopes + .orders-date-picker {
+  display: block;
+  margin-top: 14rpx;
+}
+
+.orders-customer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  border-color: #d5e4e4;
+  background: #e8f1f1;
+}
+
+.orders-customer-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.orders-customer-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx 12rpx;
+  margin-bottom: 6rpx;
+  color: #103947;
+  font-size: 32rpx;
+  font-weight: 650;
+  word-break: break-word;
+}
+
+.orders-heading {
+  min-height: 62rpx;
+  margin: 0 0 12rpx;
+}
+
+.orders-card {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 150rpx;
+  margin: 0 0 14rpx;
+  padding: 22rpx 24rpx;
+  color: #103947;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.orders-card::after {
+  border: 0;
+}
+
+.orders-card-head {
+  align-items: flex-start;
+  gap: 10rpx;
+}
+
+.orders-contact {
+  min-width: 0;
+  font-size: 34rpx;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.orders-seating {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4rpx 18rpx;
+  margin-top: 8rpx;
+  color: #405b63;
+  font-size: 26rpx;
+}
+
+.orders-tables {
+  color: #103947;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.orders-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8rpx 16rpx;
+  margin-top: 13rpx;
+  padding-top: 13rpx;
+  border-top: 1rpx solid #e5e9e6;
+  font-size: 24rpx;
+}
+
+.orders-owner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  gap: 4rpx 10rpx;
+  color: #49646b;
+}
+
+.orders-owner-name {
+  color: #103947;
+  font-size: 27rpx;
+  font-weight: 650;
+  word-break: break-word;
+}
+
+.orders-deposit {
+  padding: 5rpx 12rpx;
+  border-radius: 8rpx;
+  background: #fcf5e8;
+  color: #805e30;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.orders-card-phone {
+  display: block;
+  margin-top: 6rpx;
+  color: #49646b;
+  font-size: 24rpx;
+}
+
+.orders-pagination {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.orders-pagination .rec-button { width: 100%; }

@@ -1,0 +1,33 @@
+<view class="rec-page">
+  <view class="rec-body">
+    <view wx:if="{{error}}" class="rec-state">
+      <view class="rec-title">邀请函暂不可用</view>
+      <view class="invite-error">{{error}}</view>
+      <button class="rec-button rec-secondary" bindtap="load">重新读取</button>
+    </view>
+    <view wx:elif="{{!card}}" class="rec-state">正在读取邀请函…</view>
+    <block wx:else>
+      <view class="rec-panel invite-card">
+        <image class="invite-logo" src="/assets/coral-logo.jpg" mode="widthFix" aria-label="珊瑚海" />
+        <view class="invite-store">{{card.store}}</view>
+        <view class="invite-schedule">
+          <text class="invite-date">{{card.date}}</text>
+          <text>{{card.meal === 'lunch' ? '午餐' : '晚餐'}}</text>
+          <text>{{card.time}}</text>
+        </view>
+        <view class="invite-seating">
+          <text class="invite-guests">{{card.guests}} 位用餐</text>
+          <view wx:if="{{card.tableNames.length}}" class="invite-tables"><text wx:for="{{card.tableNames}}" wx:key="*this">{{index ? '、' : ''}}{{item}}</text></view>
+        </view>
+      </view>
+      <view wx:if="{{serviceContact || card.address || card.phone || card.servicePhone}}" class="rec-panel invite-contact">
+        <view class="rec-title">到店联系</view>
+        <view wx:if="{{serviceContact}}" class="invite-line">{{serviceContact}}</view>
+        <view wx:if="{{card.address}}" class="invite-line">{{card.address}}</view>
+        <view wx:if="{{card.phone}}" class="invite-line">订餐电话 {{card.phone}}</view>
+        <button wx:if="{{card.servicePhone}}" class="rec-button rec-primary invite-action" bindtap="contact" data-contact="staff">联系接单员工</button>
+        <button wx:if="{{card.phone}}" class="rec-button invite-action {{card.servicePhone ? 'rec-secondary' : 'rec-primary'}}" bindtap="contact" data-contact="store">联系门店</button>
+      </view>
+    </block>
+  </view>
+</view>
