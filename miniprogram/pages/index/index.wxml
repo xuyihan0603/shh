@@ -70,12 +70,12 @@
       </scroll-view>
       <view wx:if="{{!visibleTables.length}}" class="rec-state">当前筛选下没有桌位</view>
       <view wx:else class="board-grid">
-        <button wx:for="{{visibleTables}}" wx:key="id" class="board-desk board-desk-{{item.status}} {{item.floorTone ? 'rec-floor-card' : ''}} {{item.floorTone}} {{item.selected ? 'board-desk-selected' : ''}}" data-id="{{item.id}}" bindtap="tapTable" disabled="{{item.available && !canCreate}}">
+        <button wx:for="{{visibleTables}}" wx:key="id" class="board-desk rec-table-card {{item.floorTone}} {{item.selected ? 'rec-table-selected' : ''}}" data-id="{{item.id}}" bindtap="tapTable" disabled="{{item.available && !canCreate}}">
           <view class="board-desk-name">{{item.name}}</view>
           <view class="board-desk-capacity">{{item.capacityLabel}}</view>
           <view wx:if="{{item.deskMeta}}" class="board-desk-meta"><text class="{{item.floorTone ? 'rec-floor-label' : ''}}">{{item.floor}}</text>{{item.floor && item.typeLabel ? ' · ' : ''}}{{item.typeLabel}}</view>
           <view class="board-desk-footer">
-            <view class="rec-status rec-status-{{item.status}}">{{item.selected ? '已选' : item.statusLabel}}</view>
+            <view class="rec-status {{item.selected ? 'rec-status-selected' : 'rec-status-' + item.status}}">{{item.selected ? '已选' : item.statusLabel}}</view>
             <text wx:if="{{item.status === 'booked' && item.ownerName}}" class="board-desk-owner">{{item.ownerName}}</text>
           </view>
         </button>

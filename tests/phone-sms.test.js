@@ -182,3 +182,47 @@ test('手机短信页只提供一个按钮，预订消息页保留微信分享�
   assert.equal(cloudCalls.length, 1)
   assert.equal(page.data.cloudStatus, 'accepted')
 })
+
+test('微信预订草稿跨独立分包传递门头原图与地图，读取照片失败仍可分享定位文字', async () => {
+  const {page, wx} = smsPage('android', 'message')
+  const storage = new Map()
+  const files = new Map()
+  const original = readFileSync(require.resolve('../miniprogram/assets/storefront.jpg'))
+  let chatUrl, image, location
+  wx.env = {USER_DATA_PATH: 'wxfile://usr'}
+  wx.canIUse = () => true
+  wx.setStorageSync = (key, value) => storage.set(key, value)
+  wx.getStorageSync = key => storage.get(key)
+  wx.removeStorageSync = key => storage.delete(key)
+  wx.getWindowInfo = () => ({statusBarHeight: 24})
+  wx.getFileSystemManager = () => ({
+    readFileSync: path => readFileSync(require.resolve('../miniprogram' + path)),
+    writeFileSync: (path, bytes) => files.set(path, bytes),
+  })
+  wx.openChatTool = options => {chatUrl = options.url; options.success()}
+  wx.shareImageToGroup = options => {image = files.get(options.imagePath); options.success()}
+  wx.openLocation = options => {location = options}
+  async function enterChat() {
+    await page.load()
+    page.openChat()
+    let chat
+    runInNewContext(readFileSync(require.resolve('../miniprogram/chat-tool/pages/send/index.js'), 'utf8'), {
+      wx, Page(definition) {chat = definition},
+    })
+    chat.setData = data => Object.assign(chat.data, data)
+    chat.onLoad({token: new URL(chatUrl, 'https://example.test').searchParams.get('token')})
+    assert.match(chat.data.text, /https:\/\/map\.wap\.qq\.com\/\S*uid=7237907789162872389/)
+    assert.equal(storage.size, 0)
+    return chat
+  }
+  const chat = await enterChat()
+  chat.shareStorefront()
+  assert.deepEqual(image, original)
+  chat.openStoreLocation()
+  assert.equal(location.latitude, 31.031818)
+  assert.equal(location.longitude, 121.211192)
+  wx.getFileSystemManager = () => {throw new Error('local storage unavailable')}
+  const fallback = await enterChat()
+  assert.equal(fallback.data.storefrontImagePath, '')
+  assert.equal(fallback.data.hasText, true)
+})

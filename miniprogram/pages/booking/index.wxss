@@ -128,34 +128,13 @@
   min-height: 106rpx;
   margin: 0;
   padding: 11rpx 8rpx;
-  border: 1rpx solid #d5e4e4;
   border-radius: 13rpx;
-  background: #f7fbfb;
-  color: #103947;
   line-height: 1.35;
   text-align: left;
 }
 
 .booking-table::after {
   border: 0;
-}
-
-.booking-table-selected {
-  border-color: #103947;
-  background: #e8f1f1;
-  box-shadow: inset 0 0 0 1rpx #103947;
-}
-
-.booking-table-busy[disabled] {
-  border-color: #e0e3df;
-  background: #f6f4ee;
-  color: #4b5b60;
-  opacity: 1;
-}
-
-.booking-table-booked[disabled] {
-  border-color: #e5d6be;
-  background: #fcf5e8;
 }
 
 .booking-table-name {
@@ -171,14 +150,18 @@
   font-size: 22rpx;
 }
 
-.booking-table-state-label {
-  color: #49646b;
+.booking-table-floor {
+  color: var(--floor-ink, #49646b);
   font-size: 21rpx;
+}
+
+.booking-table-status {
+  margin-top: 4rpx;
 }
 
 .booking-table-owner {
   max-width: 100%;
-  color: #805e30;
+  color: #68451e;
   font-size: 24rpx;
   font-weight: 650;
   word-break: break-word;

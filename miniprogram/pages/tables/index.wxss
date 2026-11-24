@@ -8,8 +8,8 @@
 .table-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18rpx; }
 .table-fields .store-button { width: 100%; }
 .table-form .store-input { box-sizing: border-box; }
-.table-row { width: 100%; margin: 0; padding: 18rpx 4rpx; background: transparent; border-top: 1rpx solid var(--store-border); text-align: left; }
+.table-row { width: 100%; margin: 6rpx 0; padding: 18rpx 16rpx; border-radius: 12rpx; background: var(--floor-fill, #fffefa); text-align: left; }
 .table-row::after { border: 0; }
-.table-summary { display: flex; flex-direction: column; gap: 4rpx; padding-left: 14rpx; border-left: 5rpx solid var(--floor-stripe, #adbbb5); }
+.table-summary { display: flex; flex-direction: column; gap: 4rpx; }
 .table-name { color: var(--store-deep); font-weight: 600; font-size: 30rpx; }
 .table-edit { color: var(--store-deep); font-size: 26rpx; }

@@ -75,11 +75,11 @@
             </scroll-view>
             <view wx:if="{{!visibleTables.length}}" class="rec-state booking-table-state">没有桌位</view>
             <view wx:else class="booking-grid">
-              <button wx:for="{{visibleTables}}" wx:key="id" data-id="{{item.id}}" bindtap="selectTable" disabled="{{saving || !item.available}}" class="booking-table {{item.floorTone ? 'rec-floor-card' : ''}} {{item.floorTone}} {{item.selected ? 'booking-table-selected' : ''}} {{item.available ? '' : 'booking-table-busy'}} {{item.status === 'booked' ? 'booking-table-booked' : ''}}">
+              <button wx:for="{{visibleTables}}" wx:key="id" data-id="{{item.id}}" bindtap="selectTable" disabled="{{saving || !item.available}}" class="booking-table rec-table-card {{item.floorTone}} {{item.selected ? 'rec-table-selected' : ''}}">
                 <text class="booking-table-name">{{item.name}}{{item.typeLabel === '卡座' ? ' · 卡座' : ''}}</text>
                 <text class="booking-table-meta">{{item.capacityLabel}}</text>
-                <text wx:if="{{!floor && item.floor}}" class="booking-table-state-label {{item.floorTone ? 'rec-floor-label' : ''}}">{{item.floor}}</text>
-                <text wx:if="{{item.selected || !item.available}}" class="booking-table-state-label">{{item.selected ? '已选' : item.statusLabel}}</text>
+                <text wx:if="{{!floor && item.floor}}" class="booking-table-floor {{item.floorTone ? 'rec-floor-label' : ''}}">{{item.floor}}</text>
+                <text class="booking-table-status rec-status {{item.selected ? 'rec-status-selected' : 'rec-status-' + item.status}}">{{item.selected ? '已选' : item.statusLabel}}</text>
                 <text wx:if="{{item.status === 'booked' && item.ownerName}}" class="booking-table-owner">{{item.ownerName}}</text>
               </button>
             </view>

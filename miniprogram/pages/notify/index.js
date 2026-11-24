@@ -2,11 +2,20 @@ const api = require('../../lib/api')
 const { invitationText, smsFields } = require('../../lib/invitation')
 
 const CHAT_DRAFT_KEY = 'shh.chatTool.draft'
+const STOREFRONT_ASSET = '/assets/storefront.jpg'
+const STORE_LOCATION = {
+  name: '珊瑚海·台州小海鲜(兰桥商业广场店)',
+  address: '上海市松江区方松街道江学路381弄22号',
+  latitude: 31.031818,
+  longitude: 121.211192,
+}
+const STORE_MAP_URL = 'https://map.wap.qq.com/online/h5-poi-detail-out/index.html?uid=7237907789162872389'
 const EMPTY_DETAILS = {
   loading: true, error: '', needsName: false, notice: '', copyStatus: '',
   card: null, phone: '', message: '', canOpenChat: false, canCompose: false, opening: false,
   smsDiagnostic: '', smsHint: '',
   cloudEnabled: false, cloudStatus: '', cloudNote: '', cloudFields: '',
+  storeLocation: null,
 }
 const SMS_REFRESH_ERRORS = ['VERSION_CONFLICT', 'NOTIFY_PENDING', 'GONE', 'UNAUTHORIZED', 'NAME_REQUIRED', 'FORBIDDEN']
 
@@ -53,6 +62,18 @@ function discardChatDraft(token) {
     const draft = wx.getStorageSync(CHAT_DRAFT_KEY)
     if (draft && draft.token === token) wx.removeStorageSync(CHAT_DRAFT_KEY)
   } catch (_) {}
+}
+
+function prepareStorefrontImage() {
+  try {
+    // The independent chat tool can read a local user file shared by both packages.
+    const fs = wx.getFileSystemManager()
+    const path = wx.env.USER_DATA_PATH + '/shh-storefront.jpg'
+    fs.writeFileSync(path, fs.readFileSync(STOREFRONT_ASSET))
+    return path
+  } catch (_) {
+    return ''
+  }
 }
 
 Page({
@@ -124,8 +145,11 @@ Page({
           smsDiagnostic: session.diagnostic, smsHint: session.hint, opening: Boolean(this.smsAttempt),
         })
       } else {
+        const pilot = card.store === '珊瑚海'
         this.setData({
           ...preview, canOpenChat: canOpenChat(),
+          message: pilot ? preview.message + '\n\n门店定位：\n' + STORE_MAP_URL : preview.message,
+          storeLocation: pilot ? STORE_LOCATION : null,
           phone: sms?.phone || '',
           cloudEnabled: !details.trial && Boolean(sms?.enabled) && sms.status !== 'accepted' && sms.status !== 'pending',
           cloudStatus: details.trial ? '' : sms?.status || '',
@@ -172,7 +196,12 @@ Page({
     }
 
     try {
-      wx.setStorageSync(CHAT_DRAFT_KEY, { token, text: message, createdAt })
+      const draft = { token, text: message, createdAt }
+      if (this.data.storeLocation) {
+        draft.storeLocation = this.data.storeLocation
+        draft.storefrontImagePath = prepareStorefrontImage()
+      }
+      wx.setStorageSync(CHAT_DRAFT_KEY, draft)
       wx.openChatTool({
         url: '/chat-tool/pages/send/index?token=' + token,
         success: () => finish(),
@@ -181,6 +210,23 @@ Page({
     } catch (error) {
       fail(error)
     }
+  },
+
+  copyStoreName() {
+    const { storeLocation } = this.data
+    if (!storeLocation) return
+    wx.setClipboardData({
+      data: storeLocation.name,
+      fail: () => wx.showToast({ title: '请长按店名复制', icon: 'none' }),
+    })
+  },
+
+  openStoreLocation() {
+    if (!this.data.storeLocation) return
+    wx.openLocation({
+      ...this.data.storeLocation,
+      fail: () => wx.showToast({ title: '可用正文里的地图链接查看', icon: 'none' }),
+    })
   },
 
   openSms(phone) {

@@ -39,6 +39,36 @@
   margin-top: 12rpx;
 }
 
+.notify-storefront {
+  display: block;
+  width: 240rpx;
+  margin-top: 18rpx;
+  border-radius: 12rpx;
+}
+
+.notify-store-name,
+.notify-address {
+  display: block;
+  line-height: 1.5;
+}
+
+.notify-store-name {
+  margin-top: 22rpx;
+  color: #103947;
+  font-weight: 600;
+}
+
+.notify-map-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.notify-map-actions .rec-button {
+  flex: 1;
+  margin: 0;
+}
+
 .notify-hint,
 .notify-feedback,
 .notify-success,

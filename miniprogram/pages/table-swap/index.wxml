@@ -14,15 +14,15 @@
       <view class="rec-panel swap-source">
         <view class="rec-title">{{sourceTables.length > 1 ? '选择要换出的桌位' : '当前桌位'}}</view>
         <view class="rec-muted swap-schedule">{{order.dateLabel}} · {{order.mealLabel}} · {{order.time}} · {{order.guests}} 人</view>
-        <view wx:if="{{sourceTables.length === 1}}" class="swap-current">
+        <view wx:if="{{sourceTables.length === 1}}" class="swap-current swap-source-table rec-table-card {{sourceTables[0].floorTone}}">
           <text class="swap-name">{{sourceTables[0].name}}</text>
           <text class="swap-floor {{sourceTables[0].floorTone ? 'rec-floor-label' : ''}} {{sourceTables[0].floorTone}}">{{sourceTables[0].floor}}</text>
         </view>
         <view wx:else class="swap-source-grid">
-          <button wx:for="{{sourceTables}}" wx:key="id" class="swap-source-table {{sourceId === item.id ? 'swap-selected' : ''}}" data-id="{{item.id}}" bindtap="pickSource" disabled="{{submitting}}" aria-label="{{item.floor}} {{item.name}} {{sourceId === item.id ? '已选' : ''}}">
+          <button wx:for="{{sourceTables}}" wx:key="id" class="swap-source-table rec-table-card {{item.floorTone}} {{sourceId === item.id ? 'rec-table-selected' : ''}}" data-id="{{item.id}}" bindtap="pickSource" disabled="{{submitting}}" aria-label="{{item.floor}} {{item.name}} {{sourceId === item.id ? '已选' : ''}}">
             <text class="swap-name">{{item.name}}</text>
             <text class="swap-floor {{item.floorTone ? 'rec-floor-label' : ''}} {{item.floorTone}}">{{item.floor}}</text>
-            <text wx:if="{{sourceId === item.id}}" class="rec-muted">已选</text>
+            <text wx:if="{{sourceId === item.id}}" class="rec-status rec-status-selected">已选</text>
           </button>
         </view>
       </view>
@@ -35,7 +35,7 @@
         </scroll-view>
         <view class="swap-target-grid">
           <block wx:for="{{targetTables}}" wx:key="id">
-            <button wx:if="{{!floor || floor === item.floor}}" class="swap-target {{item.floorTone ? 'rec-floor-card' : ''}} {{item.floorTone}} {{targetId === item.id ? 'swap-selected' : ''}}" bindtap="pickTarget" data-id="{{item.id}}" disabled="{{submitting}}">
+            <button wx:if="{{!floor || floor === item.floor}}" class="swap-target rec-table-card {{item.floorTone}} {{targetId === item.id ? 'rec-table-selected' : ''}}" bindtap="pickTarget" data-id="{{item.id}}" disabled="{{submitting}}">
               <text class="swap-name">{{item.name}}</text>
               <text class="swap-floor {{item.floorTone ? 'rec-floor-label' : ''}} {{item.floorTone}}">{{item.floor}}</text>
               <text class="rec-muted swap-capacity">{{item.capacityLabel}}</text>

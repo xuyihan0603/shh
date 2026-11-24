@@ -13,6 +13,21 @@ const ok = data => ({ statusCode: 200, data })
 const failure = (statusCode, code, error) => ({ statusCode, data: { code, error } })
 const token = request => request.header.Authorization
 const paths = requests => requests.map(request => request.path)
+const privateDetails = 'openid=wx-private-user phone=13900009999 bearer=test-private-session'
+const privateValues = /wx-private-user|13900009999|test-private-session/
+const timedOut = { errCode: -102002, errMsg: 'callContainer:fail request timeout ' + privateDetails }
+
+async function advanceCloud(t, ms) {
+  t.mock.timers.tick(ms)
+  await new Promise(setImmediate)
+}
+
+async function waitForAccess(t, page) {
+  for (let elapsed = 0; page.data.checking && elapsed < 60000; elapsed += 1000) {
+    await advanceCloud(t, 1000)
+  }
+  assert.equal(page.data.checking, false)
+}
 
 function cloudClient(version, respond) {
   const requests = []
@@ -25,12 +40,14 @@ function cloudClient(version, respond) {
         assert.equal(options.env, target.env)
         initializations++
       },
-      callContainer({ success, config, ...request }) {
+      callContainer({ success, fail, config, ...request }) {
         assert.equal(initializations, 1)
         assert.equal(config.env, target.env)
         assert.equal(request.header['X-WX-SERVICE'], target.service)
         requests.push(request)
-        success(respond(request))
+        const response = respond(request, { success, fail })
+        if (typeof response?.then === 'function') return response
+        if (response !== undefined) success(response)
       },
     },
     switchTab({ url }) { navigation.push(url) },
@@ -42,7 +59,7 @@ function cloudClient(version, respond) {
   const fromApi = createRequire(apiPath)
   const module = { exports: {} }
   runInNewContext(readFileSync(apiPath, 'utf8'), {
-    module, wx,
+    module, wx, Date, setTimeout,
     require(name) { return name === '../config' ? { cloudRun: target } : fromApi(name) },
   })
   return { api: module.exports, requests, navigation, wx }
@@ -93,6 +110,199 @@ test('只在开发版或体验版且验证独立测试门店及微信身份后�
   assert.deepEqual(paths(requests).slice(3), ['/health', '/auth/wechat', '/api/bootstrap'])
 })
 
+test('先初始化云托管，再调用初始化时可用的容器接口', async () => {
+  const { api, wx, requests } = cloudClient('trial', request => {
+    if (request.path === '/health') return ok(healthy)
+    if (request.path === '/auth/wechat') return ok({ token: 'wechat-session' })
+    assert.equal(request.path, '/api/bootstrap')
+    return ok({ me: { role: 'manager' } })
+  })
+  const { init, callContainer } = wx.cloud
+  delete wx.cloud.callContainer
+  let initializationFailed = true
+  wx.cloud.init = options => {
+    if (initializationFailed) throw Object.assign(new Error(privateDetails), { code: -601027 })
+    return init(options).then(() => { wx.cloud.callContainer = callContainer })
+  }
+
+  await assert.rejects(api.call('bootstrap'), error => {
+    assert.match(error.message, /微信云托管初始化.*微信错误码 -601027/)
+    assert.doesNotMatch(error.message, privateValues)
+    return true
+  })
+  assert.deepEqual(requests, [])
+
+  initializationFailed = false
+  assert.equal((await api.call('bootstrap')).me.role, 'manager')
+  assert.deepEqual(paths(requests), ['/health', '/auth/wechat', '/api/bootstrap'])
+})
+
+test('首次进入时等候门店冷启动，并发请求共用健康检查和微信登录', async t => {
+  const scenarios = {
+    '网关立即返回 HTTP 503': () => failure(503, 'UNAVAILABLE', privateDetails),
+    '微信请求达到超时上限': (request, fail) => { setTimeout(() => fail(timedOut), request.timeout) },
+  }
+  for (const [name, failWhenCold] of Object.entries(scenarios)) {
+    await t.test(name, async scenario => {
+      scenario.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+      const healthAttempts = []
+      const readyAt = 30000
+      const client = cloudClient('trial', (request, { fail }) => {
+        switch (request.path) {
+          case '/health':
+            healthAttempts.push(Date.now())
+            return Date.now() >= readyAt ? ok(healthy) : failWhenCold(request, fail)
+          case '/auth/wechat': return ok({ token: 'wechat-session' })
+          case '/api/bootstrap': return ok({ me: { role: 'manager', nameBound: true } })
+          case '/api/board': return ok({ tables: [] })
+          default: assert.fail('意外请求 ' + request.path)
+        }
+      })
+      const access = pageFor('access', client)
+      const firstEntry = access.onShow()
+      const board = client.api.call('board').catch(error => error)
+      await advanceCloud(scenario, 0)
+      assert.deepEqual(paths(client.requests), ['/health'])
+      assert.equal(client.requests[0].timeout, 15000)
+      assert.equal(access.data.checking, true)
+
+      await waitForAccess(scenario, access)
+      await firstEntry
+      assert.deepEqual(await board, { tables: [] })
+      assert.deepEqual(client.navigation, ['/pages/index/index'])
+      assert.equal(access.data.error, '')
+      assert.ok(healthAttempts.length > 1 && healthAttempts.length <= 4)
+      assert.equal(new Set(healthAttempts).size, healthAttempts.length)
+      assert.ok(healthAttempts.at(-1) >= readyAt)
+      const routes = paths(client.requests)
+      assert.deepEqual(routes.slice(0, -2), [...healthAttempts.map(() => '/health'), '/auth/wechat'])
+      assert.deepEqual(routes.slice(-2).sort(), ['/api/board', '/api/bootstrap'])
+      assert.ok(client.requests.every(request => request.timeout === 15000))
+    })
+  }
+})
+
+test('健康检查遇到权限、环境配置错误或断网时立即结束并显示脱敏错误码', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const scenarios = [
+    { respond: () => failure(403, 'PERMISSION_DENIED', privateDetails), code: /HTTP 403/ },
+    ...['Path access permission error', 'env not exists'].map(reason => ({
+      respond: (_, { fail }) => fail({ errCode: -501000, errMsg: reason + ' ' + privateDetails }),
+      code: /微信错误码 -501000/,
+    })),
+    {
+      respond: (_, { fail }) => fail({ ...timedOut, errMsg: 'No internet connection ' + timedOut.errMsg }),
+      code: /请连接网络.*微信错误码 -102002/,
+    },
+  ]
+  for (const { respond, code } of scenarios) {
+    const client = cloudClient('trial', respond)
+    const access = pageFor('access', client)
+    const firstEntry = access.onShow()
+    await advanceCloud(t, 0)
+    assert.equal(access.data.checking, false)
+    await firstEntry
+    await advanceCloud(t, 60000)
+    assert.deepEqual(paths(client.requests), ['/health'])
+    assert.match(access.data.error, /门店健康检查/)
+    assert.match(access.data.error, code)
+    assert.doesNotMatch(access.data.error, privateValues)
+  }
+})
+
+test('健康检查耗尽重试后可通过手动刷新重新进入门店', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+  let available = false
+  const client = cloudClient('trial', request => {
+    switch (request.path) {
+      case '/health': return available ? ok(healthy) : failure(503, 'UNAVAILABLE', privateDetails)
+      case '/auth/wechat': return ok({ token: 'wechat-session' })
+      case '/api/bootstrap': return ok({ me: { role: 'manager', nameBound: true } })
+      default: assert.fail('意外请求 ' + request.path)
+    }
+  })
+  const access = pageFor('access', client)
+  const firstEntry = access.onShow()
+  await waitForAccess(t, access)
+  assert.deepEqual(paths(client.requests), ['/health', '/health', '/health', '/health'])
+  await firstEntry
+  assert.match(access.data.error, /门店健康检查/)
+  assert.match(access.data.error, /HTTP 503/)
+  assert.doesNotMatch(access.data.error, privateValues)
+
+  available = true
+  await access.refresh()
+  assert.deepEqual(paths(client.requests).slice(4), ['/health', '/auth/wechat', '/api/bootstrap'])
+  assert.deepEqual(client.navigation, ['/pages/index/index'])
+  assert.equal(access.data.error, '')
+})
+
+test('保存预订遇到传输或网关错误时只发送一次', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const order = { contact: '陈青', phone: '13900009999', guests: 4 }
+  const scenarios = [
+    { respond: ({ fail }) => fail(timedOut), code: /微信错误码 -102002/ },
+    { respond: () => { throw timedOut }, code: /微信错误码 -102002/ },
+    { respond: () => failure(503, 'UNAVAILABLE', privateDetails), code: /HTTP 503/ },
+    { respond: () => failure(401, 'GATEWAY_UNAUTHORIZED', privateDetails), code: /HTTP 401/ },
+  ]
+  for (const { respond, code } of scenarios) {
+    const { api, requests } = cloudClient('trial', (request, callbacks) => {
+      switch (request.path) {
+        case '/health': return ok(healthy)
+        case '/auth/wechat': return ok({ token: 'test-private-session' })
+        case '/api/save': return respond(callbacks)
+        default: assert.fail('意外请求 ' + request.path)
+      }
+    })
+    const save = api.call('save', order).catch(error => error)
+    await advanceCloud(t, 0)
+    await advanceCloud(t, 60000)
+    assert.deepEqual(paths(requests), ['/health', '/auth/wechat', '/api/save'])
+    assert.equal(requests[2].method, 'POST')
+    assert.deepEqual(requests[2].data, order)
+    const error = await save
+    assert.match(error.message, /门店请求/)
+    assert.match(error.message, code)
+    assert.doesNotMatch(error.message, privateValues)
+  }
+})
+
+test('微信登录的请求失败后只在手动重试时重新验证并登录', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  let loginFailed = true
+  const { api, requests } = cloudClient('trial', request => {
+    if (request.path === '/health') return ok(healthy)
+    if (request.path === '/auth/wechat') {
+      return loginFailed ? Promise.reject({ errno: '-102002', errMsg: privateDetails }) : ok({ token: 'wechat-session' })
+    }
+    assert.equal(request.path, '/api/bootstrap')
+    return ok({ me: { role: 'manager' } })
+  })
+  const initialLogin = api.call('bootstrap').catch(error => error)
+  await advanceCloud(t, 0)
+  await advanceCloud(t, 60000)
+  assert.deepEqual(paths(requests), ['/health', '/auth/wechat'])
+  const error = await initialLogin
+  assert.match(error.message, /微信登录.*微信错误码 -102002/)
+  assert.doesNotMatch(error.message, privateValues)
+
+  loginFailed = false
+  assert.equal((await api.call('bootstrap')).me.role, 'manager')
+  assert.deepEqual(paths(requests).slice(2), ['/health', '/auth/wechat', '/api/bootstrap'])
+})
+
+test('门店服务返回短信业务错误时保留业务提示', async () => {
+  const message = '门店尚未配置签名短信，可以使用手机短信或复制预订消息'
+  const { api } = cloudClient('trial', request => {
+    if (request.path === '/health') return ok(healthy)
+    if (request.path === '/auth/wechat') return ok({ token: 'wechat-session' })
+    assert.equal(request.path, '/api/notifySms')
+    return failure(503, 'SMS_UNCONFIGURED', message)
+  })
+  await assert.rejects(api.call('notifySms', { id: 'order-1' }), { code: 'SMS_UNCONFIGURED', message })
+})
+
 test('多个操作共用微信会话，过期后重新登记一次并重试', async () => {
   let issued = 0
   let invalidated = false
@@ -113,6 +323,44 @@ test('多个操作共用微信会话，过期后重新登记一次并重试', as
   assert.equal(issued, 2)
   assert.equal(paths(requests).filter(path => path === '/health').length, 1)
   assert.equal(paths(requests).filter(path => path === '/api/board').length, 3)
+})
+
+test('闲置十多分钟后并发刷新共用新健康检查并保留有效会话', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 })
+  const me = { role: 'manager', nameBound: true }
+  let resumed = false
+  let completeHealth
+  const { api, requests } = cloudClient('trial', (request, { success }) => {
+    if (request.path === '/health') {
+      if (!resumed) return ok(healthy)
+      completeHealth = success
+      return
+    }
+    if (request.path === '/auth/wechat') return ok({ token: 'wechat-session' })
+    assert.equal(token(request), 'Bearer wechat-session')
+    if (request.path === '/api/bootstrap') return ok({ me })
+    if (request.path === '/api/storeOrders') return ok({ orders: [] })
+    assert.fail('意外请求 ' + request.path)
+  })
+  assert.deepEqual(await api.call('bootstrap'), { me })
+  assert.deepEqual(paths(requests), ['/health', '/auth/wechat', '/api/bootstrap'])
+
+  await advanceCloud(t, 4 * 60 * 1000)
+  assert.deepEqual(await api.call('storeOrders'), { orders: [] })
+  await advanceCloud(t, 4 * 60 * 1000)
+  assert.deepEqual(await api.call('storeOrders'), { orders: [] })
+  assert.deepEqual(paths(requests).slice(3), ['/api/storeOrders', '/api/storeOrders'])
+
+  await advanceCloud(t, 12 * 60 * 1000)
+  resumed = true
+  const refresh = Promise.all([
+    api.call('bootstrap'), api.call('storeOrders', { meal: 'lunch' }),
+  ]).catch(error => error)
+  await advanceCloud(t, 0)
+  assert.deepEqual(paths(requests).slice(5), ['/health'])
+  completeHealth(ok(healthy))
+  assert.deepEqual(await refresh, [{ me }, { orders: [] }])
+  assert.deepEqual(paths(requests).slice(6).sort(), ['/api/bootstrap', '/api/storeOrders'])
 })
 
 test('仅凭宾客邀请凭证读取详情，不发起员工登记', async () => {

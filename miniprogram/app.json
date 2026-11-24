@@ -18,7 +18,7 @@
     {
       "root": "chat-tool",
       "entryPagePath": "pages/send/index",
-      "desc": "发送预订通知文字"
+      "desc": "发送预订文字和门头照片"
     }
   ],
   "rendererOptions": {

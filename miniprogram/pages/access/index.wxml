@@ -6,8 +6,11 @@
       <view class="access-environment">测试门店</view>
     </view>
   </view>
-  <view wx:if="{{error}}" class="store-error" role="alert">{{error}}</view>
-  <view wx:if="{{!me && checking}}" class="store-card store-state">正在确认微信身份…</view>
+  <view wx:if="{{error}}" class="store-error" role="alert"><text user-select>{{error}}</text></view>
+  <view wx:if="{{!me && checking}}" class="store-card store-state">
+    <view>正在连接门店并确认微信身份…</view>
+    <view class="store-caption">服务休眠后，首次连接可能需要约一分钟。</view>
+  </view>
   <button wx:elif="{{!me}}" class="store-button store-button-secondary" bindtap="refresh">重新连接</button>
   <block wx:else>
     <view class="store-card">

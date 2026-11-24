@@ -23,6 +23,8 @@
 
 用同一 AppID 的开发者工具调用 `GET /health` 验收。响应的 `service` 应为 `shh-booking`，`environment` 应为 `wechat-test`，`storage` 应为 `mysql`，`ok` 和 `wechatIdentity` 均为 `true`。本地业务回归使用 Node.js 22.13 或更新版本运行 `npm test`。
 
+门店空闲后，云服务和数据库可能需要唤醒。小程序每次云请求最多等待 15 秒，首次连接遇到暂时超时会自动重试健康检查。若仍然失败，点「重新连接」，排查时可长按复制页面提示的失败阶段和错误码。[微信云托管调用常见问题](https://developers.weixin.qq.com/miniprogram/dev/wxcloudservice/wxcloudrun/src/development/call/faq.html)
+
 ### 用手机号识别回头客
 
 新建预订时先输入客人手机号。有到店记录且留过姓名的客人会自动带出姓名、到店次数和客群标签，员工可在本笔预订中更正姓名。相同手机号每笔实际到店的订单计一次，一单订多桌也计一次。待到店与已取消预订不计入次数。管理员和店长可查看全店来电历史，营销可通过完整号码识别回头客，订单明细按岗位权限展示。
@@ -33,7 +35,7 @@
 
 ### 分享预订和发送短信
 
-在已预订的订单详情点「发送微信」，核对门店模板生成的正文，点「选择微信联系人」，选好好友或群聊后，在微信聊天工具里确认发送文字。该能力适用于微信 iOS / Android 8.0.56 及以上、基础库 3.7.8 及以上。也可以点「复制预订消息」，切换到微信对话后粘贴发送。[微信聊天工具模式](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/chatTool.html)
+在已预订的订单详情点「发送微信」，核对正文后点「选择微信联系人」。选好好友或群聊，在同一聊天工具里分别点「发送文字」和「发送门头照片」。正文末尾附珊瑚海的腾讯地图地点链接。要发送独立的位置卡片，可点「复制店名」，回到微信聊天点「＋ → 位置 → 发送位置」，搜索店名并核对江学路381弄22号。聊天工具适用于微信 iOS / Android 8.0.56 及以上、基础库 3.7.8 及以上。较旧版本可复制正文、长按门头照片转发。[微信聊天工具模式](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/chatTool.html) · [原生图片发送接口](https://developers.weixin.qq.com/miniprogram/dev/api/chattool/wx.shareImageToGroup.html)
 
 正文列出用餐日期、星期、午宴或晚宴、餐位、人数、地址和订餐电话。「专职为您服务」一行使用接单时的员工姓名和该员工当前的服务手机号。管理员更正姓名后，新建预订会记录新姓名。服务手机号更新后，重新打开已有预订的消息也能看到新号码。
 
