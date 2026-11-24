@@ -1,17 +1,18 @@
 'use strict'
 
 const app = document.querySelector('#app')
-const roles = { manager: '店长', front: '前台', sales: '客户经理', finance: '财务' }
+const staffRoles = { sales: '营销', finance: '财务', manager: '店长' }
+const roles = { ...staffRoles, admin: '管理员' }
 const meals = { lunch: '午餐', dinner: '晚餐' }
 const statuses = { booked: '已预订', arrived: '已到店', settled: '已结账', cancelled: '已取消' }
 const tableTypes = { hall: '散台', room: '包间', unknown: '待确认' }
 const depositMethods = new Map(Object.entries({ cash: '现金', wechat: '微信', alipay: '支付宝', bank: '银行卡', other: '其他' }))
 const views = {
-  report: { title: '财务报表', roles: ['manager', 'finance'] },
+  report: { title: '财务报表', roles: ['admin', 'manager', 'finance'] },
   orders: { title: '订单核对', roles: Object.keys(roles) },
-  handover: { title: '存量预订录入', roles: ['manager'] },
-  config: { title: '门店与桌位', roles: ['manager'] },
-  staff: { title: '员工账号', roles: ['manager'] },
+  handover: { title: '存量预订录入', roles: ['admin', 'manager'] },
+  config: { title: '门店与桌位', roles: ['admin'] },
+  staff: { title: '员工账号', roles: ['admin'] },
   profile: { title: '我的', roles: Object.keys(roles) }
 }
 const localDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -285,7 +286,8 @@ function configRow(tableData, index, existingIds) {
     <td>${field('桌名', 'tableName', { className: 'cell-field', value: tableData.name, attrs: 'required' })}</td>
     <td>${field('楼层', 'tableFloor', { className: 'cell-field', value: tableData.floor, attrs: 'required' })}</td>
     <td>${field('类型', 'tableType', { className: 'cell-field', embed: select('tableType', tableTypes, tableData.type) })}</td>
-    <td>${field('容量', 'tableCapacity', { className: 'cell-field', type: 'number', value: tableData.capacity, attrs: 'min="1" step="1" placeholder="待补充"' })}</td>
+    <td>${field('最少人数', 'tableMinCapacity', { className: 'cell-field', type: 'number', value: tableData.minCapacity, attrs: 'min="1" step="1"' })}</td>
+    <td>${field('最多人数', 'tableCapacity', { className: 'cell-field', type: 'number', value: tableData.capacity, attrs: 'min="1" step="1"' })}</td>
     <td><button type="button" class="link danger" data-action="table-remove" data-value="${index}" aria-label="移除${escape(tableData.name || '桌位')}">移除</button></td></tr>`
 }
 
@@ -299,7 +301,7 @@ function showConfig(draft = state.context) {
       ${field('门店地址', 'address', { value: store.address })}
     </div></section>
     <section><div class="section-heading"><h2>桌位</h2><button type="button" class="btn" data-action="table-add">新增桌位</button></div>
-      ${tables.length ? table([['桌位编号', 'id'], ['桌名', 'name'], ['楼层', 'floor'], ['类型', 'type'], ['容量', 'capacity'], ['操作']],
+      ${tables.length ? table([['桌位编号', 'id'], ['桌名', 'name'], ['楼层', 'floor'], ['类型', 'type'], ['最少人数', 'capacity'], ['最多人数', 'capacity'], ['操作']],
         tables.map((item, index) => configRow(item, index, existingIds)).join(''), 'config-tables') : empty('暂无桌位。')}
     </section>
     <div class="form-footer"><button type="submit" class="btn btn-primary">保存配置</button></div>
@@ -312,7 +314,8 @@ function configDraft(form) {
     store: { name: values.name, phone: values.phone, address: values.address },
     tables: Array.from(form.querySelectorAll('[data-table-row]'), row => {
       const get = name => row.querySelector(`[name="${name}"]`).value
-      return { id: get('tableId'), name: get('tableName'), floor: get('tableFloor'), type: get('tableType'), capacity: get('tableCapacity') || null }
+      return { id: get('tableId'), name: get('tableName'), floor: get('tableFloor'), type: get('tableType'),
+        minCapacity: get('tableMinCapacity') || null, capacity: get('tableCapacity') || null }
     })
   }
 }
@@ -344,6 +347,11 @@ function showHandover() {
   refreshBoard(app.querySelector('#handover'))
 }
 
+function capacityText({ minCapacity, capacity }) {
+  if (capacity == null) return '人数待补充'
+  return minCapacity && minCapacity !== capacity ? `${minCapacity}–${capacity} 人` : `${capacity} 人`
+}
+
 function drawBoard(tables, selected) {
   const floors = new Map()
   for (const item of tables) {
@@ -353,7 +361,7 @@ function drawBoard(tables, selected) {
   return Array.from(floors, ([floor, floorTables]) => `<section class="floor-group"><h3>${escape(floor)}</h3><div class="tables">
     ${floorTables.map(item => `<label class="table-option ${item.orderId ? 'occupied' : ''}">
       <input type="checkbox" name="tableIds" value="${escape(item.id)}" ${item.orderId ? 'disabled' : selected.has(item.id) ? 'checked' : ''}>
-      <span><strong>${escape(item.name)}</strong><small>${item.orderId ? '已占 · ' : ''}${tableTypes[item.type]} · ${item.capacity == null ? '容量待补充' : `${item.capacity} 人`}</small></span>
+      <span><strong>${escape(item.name)}</strong><small>${item.orderId ? '已占 · ' : ''}${tableTypes[item.type]} · ${escape(capacityText(item))}</small></span>
     </label>`).join('')}
   </div></section>`).join('') || '<p class="muted">暂无桌位，请先维护门店配置。</p>'
 }
@@ -422,7 +430,7 @@ function staffDialog(person) {
     <div class="form-grid">
       ${field('姓名', 'name', { value: person?.name, attrs: 'required maxlength="40"' })}
       ${field('员工账号', 'id', { value: person?.id, attrs: editing ? 'readonly' : 'required pattern="[A-Za-z0-9_\\-]+" maxlength="40" autocomplete="off"' })}
-      ${field('岗位', 'role', { embed: select('role', roles, person?.role || 'front') })}
+      ${field('岗位', 'role', { embed: select('role', person?.role === 'admin' ? { admin: roles.admin } : staffRoles, person?.role || 'sales') })}
       ${field('状态', 'active', { embed: select('active', { true: '启用', false: '停用' }, editing ? String(person.active) : 'true') })}
       ${servicePhoneField(person?.servicePhone)}
       ${field(editing ? '新密码（选填）' : '初始密码', 'password', { type: 'password', className: 'full',

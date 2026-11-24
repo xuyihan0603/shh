@@ -68,7 +68,7 @@ test('员工手机打开短信编辑器时预填客人号码与用餐资料，�
   page.compose()
   assert.equal(started.length, 1)
   assert.equal(started[0].phoneNumber, '13800000001')
-  for (const text of ['感謝您預订《珊瑚海》用餐', '餐位:二楼201、202', '人数10位！', '小李专职为您服务：13800000002', '订餐电话：37827177']) {
+  for (const text of ['感謝您預订《珊瑚海》用餐', '餐位:二楼201包房、202包房', '人数10位！', '小李专职为您服务：13800000002', '订餐电话：37827177']) {
     assert.ok(started[0].content.includes(text), text)
   }
   assert.match(started[0].content, /用餐時間:\d+月\d+日\(周[日一二三四五六]\)晚宴/)
@@ -155,7 +155,7 @@ test('安卓可直接打开精简短信，只带号码打开失败后也仍可�
   assert.equal(started.length, 1)
   assert.equal(started[0].phoneNumber, page.data.phone)
   assert.equal(started[0].content, page.data.shortSms.message)
-  assert.match(started[0].content, /^珊瑚海预订 \d{2}\/\d{2} \d{2}:\d{2} 二楼201、202 10位$/)
+  assert.match(started[0].content, /^珊瑚海预订 \d{2}\/\d{2} \d{2}:\d{2} 二楼201包房、202包房 10位$/)
   assert.ok(Buffer.byteLength(started[0].content, 'utf8') <= 64)
   started[0].fail({errMsg: 'sendSms:fail 内容超出正文上限'})
   assert.equal(page.data.smsMode, 'number')

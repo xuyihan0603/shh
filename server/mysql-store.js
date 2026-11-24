@@ -2,7 +2,7 @@ const mysql = require('mysql2/promise')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const { randomBytes } = require('node:crypto')
-const { WECHAT_TEST_MODE, writes, fault, digest, passwordRecord, passwordMatches, validateInitialPassword, loginResult, initialState, refreshState, applyAction } = require('./store-rules')
+const { WECHAT_TEST_MODE, ADMIN_ID, writes, fault, digest, passwordRecord, passwordMatches, validateInitialPassword, loginResult, initialState, refreshState, applyAction } = require('./store-rules')
 const { describeSms, canSendSms } = require('./notifications')
 
 const testDatabase = 'shh_booking_test'
@@ -64,7 +64,7 @@ async function createDatabaseIfMissing(pool, options) {
 function validateAdminRecord(salt, hash) {
   if (typeof salt !== 'string' || !/^[0-9a-f]{32}$/.test(salt) ||
       typeof hash !== 'string' || !/^[0-9a-f]{128}$/.test(hash)) {
-    throw configError('初始店长凭据格式无效')
+    throw configError('初始管理员凭据格式无效')
   }
   return { salt, hash }
 }
@@ -80,19 +80,19 @@ async function initialAdmin(env, wechatTest) {
   try {
     source = await fs.readFile(filename, 'utf8')
   } catch (err) {
-    if (err.code !== 'ENOENT' || env.STORE_ADMIN_RECORD_FILE) throw configError('无法读取初始店长凭据文件')
+    if (err.code !== 'ENOENT' || env.STORE_ADMIN_RECORD_FILE) throw configError('无法读取初始管理员凭据文件')
   }
   if (source !== undefined) {
     let record
     try {
       record = JSON.parse(source)
     } catch {
-      throw configError('初始店长凭据文件格式无效')
+      throw configError('初始管理员凭据文件格式无效')
     }
     return validateAdminRecord(record?.salt, record?.hash)
   }
-  if (wechatTest) throw configError('新微信测试数据库需要 STORE_ADMIN_RECORD 或初始店长凭据文件')
-  if (!env.STORE_ADMIN_PASSWORD) throw configError('新数据库需要配置初始店长凭据')
+  if (wechatTest) throw configError('新微信测试数据库需要 STORE_ADMIN_RECORD 或初始管理员凭据文件')
+  if (!env.STORE_ADMIN_PASSWORD) throw configError('新数据库需要配置初始管理员凭据')
   validateInitialPassword(env.STORE_ADMIN_PASSWORD)
   return passwordRecord(env.STORE_ADMIN_PASSWORD)
 }
@@ -166,7 +166,7 @@ async function openMysqlStore(env = process.env) {
         return
       }
       const { salt, hash } = await initialAdmin(env, wechatTest)
-      await connection.execute('INSERT INTO shh_credentials (id,salt,hash) VALUES (?,?,?)', ['manager', salt, hash])
+      await connection.execute('INSERT INTO shh_credentials (id,salt,hash) VALUES (?,?,?)', [ADMIN_ID, salt, hash])
       const snapshot = initialState()
       if (wechatTest) {
         snapshot.environment = environment
@@ -240,7 +240,7 @@ async function openMysqlStore(env = process.env) {
   async function bindWechatAdmin(identity, token, password) {
     const result = await withState(true, async (connection, state) => {
       const staffId = await sessionStaffId(token, connection, identity)
-      if (state.staff.some(staff => staff.id === 'manager')) throw fault('ADMIN_BOUND', '管理员已绑定微信')
+      if (state.staff.some(staff => staff.id === ADMIN_ID)) throw fault('ADMIN_BOUND', '管理员已绑定微信')
       const person = state.staff.find(staff => staff.id === staffId && staff.active !== false && staff.role === 'pending')
       if (!person) throw fault('FORBIDDEN', '该微信员工无法绑定管理员')
 
@@ -248,16 +248,16 @@ async function openMysqlStore(env = process.env) {
       const { failures, retryAt } = await first(connection, 'SELECT failures,retryAt FROM shh_wechat_identities WHERE identityHash=?', [identity])
       const attempts = retryAt > now ? failures : 0
       if (attempts >= 5) throw fault('RATE_LIMIT', '尝试次数过多，请稍后绑定')
-      const record = await first(connection, 'SELECT salt,hash FROM shh_credentials WHERE id=?', ['manager'])
+      const record = await first(connection, 'SELECT salt,hash FROM shh_credentials WHERE id=?', [ADMIN_ID])
       if (!record || !passwordMatches(password, record)) {
         await connection.execute('UPDATE shh_wechat_identities SET failures=?,retryAt=? WHERE identityHash=?',
           [attempts + 1, attempts ? retryAt : now + 10 * 60 * 1000, identity])
         return null
       }
 
-      Object.assign(person, { id: 'manager', role: 'manager', name: person.nameBound ? person.name : '店长' })
-      await connection.execute('UPDATE shh_wechat_identities SET staffId=?,failures=0,retryAt=0 WHERE identityHash=?', ['manager', identity])
-      await connection.execute('DELETE FROM shh_credentials WHERE id=?', ['manager'])
+      Object.assign(person, { id: ADMIN_ID, role: 'admin', name: person.nameBound ? person.name : '管理员' })
+      await connection.execute('UPDATE shh_wechat_identities SET staffId=?,failures=0,retryAt=0 WHERE identityHash=?', [ADMIN_ID, identity])
+      await connection.execute('DELETE FROM shh_credentials WHERE id=?', [ADMIN_ID])
       await revokeSessions(connection, staffId)
       await persist(connection, state)
       return saveWechatSession(connection, person)

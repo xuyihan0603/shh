@@ -62,7 +62,7 @@ test('首次绑定只更新当前账号，并在不同服务连接间保留接�
   const historical = store.read().orders
   assert.equal((await send('/api/bindStaffName',{name:'匿名'})).status,401)
   const initial = (await send('/api/bootstrap',{},manager)).body
-  assert.deepEqual(initial.me,{id:'manager',name:'店长',role:'manager',nameBound:false})
+  assert.deepEqual(initial.me,{id:'manager',name:'管理员',role:'admin',nameBound:false})
   assert.equal(initial.nameSuggestion,'')
   assert.deepEqual(initial.tables,[])
   assert.equal((await send('/api/staffList',{},manager)).body.code,'NAME_REQUIRED')
@@ -75,7 +75,7 @@ test('首次绑定只更新当前账号，并在不同服务连接间保留接�
     send('/api/bindStaffName',{name,staffId:'sales1',role:'finance'},manager,index)))
   assert.deepEqual(attempts.map(result=>result.status).sort(),[200,403])
   const confirmed = attempts.find(result=>result.status===200).body
-  assert.deepEqual(confirmed,{id:'manager',name:names[attempts.findIndex(result=>result.status===200)].trim(),role:'manager',nameBound:true})
+  assert.deepEqual(confirmed,{id:'manager',name:names[attempts.findIndex(result=>result.status===200)].trim(),role:'admin',nameBound:true})
   assert.deepEqual((await send('/api/bootstrap',{},manager,1)).body.me,confirmed)
   assert.deepEqual((await send('/api/bindStaffName',{name:confirmed.name},manager,1)).body,confirmed)
   assert.deepEqual(store.read().orders,historical)
@@ -119,14 +119,14 @@ test('两个服务连接抢同一桌，冲突不占其他桌；旧版本换桌�
   const base = {date:today(),meal:'lunch',kind:'booking',time:'12:30',guests:4,contact:'验收客人',phone:'13800000099'}
   const responses = await Promise.all([
     send('/api/save',{...base,tableIds:['201','202']},a,0),
-    send('/api/save',{...base,tableIds:['202','204']},b,1)
+    send('/api/save',{...base,tableIds:['202','203']},b,1)
   ])
   assert.deepEqual(responses.map(r=>r.status).sort(),[200,409])
   const winner = responses.findIndex(r=>r.status===200)
   const order = responses[winner].body
   const token = winner===0 ? a : b
   const loser = winner===0 ? b : a
-  const spare = winner===0 ? '204' : '201'
+  const spare = winner===0 ? '203' : '201'
   const board = (await send('/api/board',{date:today(),meal:'lunch'},token)).body
   assert.equal(board.tables.find(t=>t.id===spare).orderId,null)
   assert.equal((await send('/api/order',{id:order.id},loser)).body.phone,'138****0099')

@@ -1,7 +1,7 @@
 const { call, today, openAccess } = require('../../lib/api')
 const {
-  MEALS, currentMeal, dateLabel, canBook, canWalkIn, presentTables, floorOptions,
-  errorMessage, orderUrl, phoneInput, isPhone, readAmount,
+  MEALS, currentMeal, dateLabel, canBook, canManageOrders, presentTables, floorOptions,
+  errorMessage, orderUrl, phoneInput, isPhone, readAmount, formatCapacity,
 } = require('../../lib/reception')
 
 Page({
@@ -24,8 +24,7 @@ Page({
     floors: [],
     floor: '',
     selectedNames: '',
-    selectedCapacity: 0,
-    missingCapacity: false,
+    selectedCapacityLabel: '',
     contextLoading: true,
     contextError: '',
     forbidden: false,
@@ -98,7 +97,7 @@ Page({
         this.setData({ contextLoading: false, needsName: true, contextError: '首次接单前，请先填写员工姓名。' })
         return
       }
-      const enabled = isWalkIn ? canWalkIn(me.role) : canBook(me.role)
+      const enabled = isWalkIn ? canManageOrders(me.role) : canBook(me.role)
       if (!enabled || (order && !order.canEdit)) {
         this.setData({
           contextLoading: false, forbidden: true,
@@ -172,12 +171,15 @@ Page({
       .filter(table => !floor || table.floor === floor)
       .map(table => ({ ...table, selected: tableIds.includes(table.id) }))
     const selected = tables.filter(table => tableIds.includes(table.id))
+    const maxCapacity = selected.some(table => table.capacity == null)
+      ? null : selected.reduce((count, table) => count + table.capacity, 0)
+    const minCapacity = selected.some(table => table.minCapacity == null)
+      ? null : selected.reduce((count, table) => count + table.minCapacity, 0)
     this.setData({
       visibleTables,
       'form.tableIds': tableIds,
       selectedNames: selected.map(table => table.name).join('、'),
-      selectedCapacity: selected.reduce((count, table) => count + (table.capacity || 0), 0),
-      missingCapacity: selected.some(table => table.capacity == null),
+      selectedCapacityLabel: selected.length ? formatCapacity(minCapacity, maxCapacity) : '',
     })
   },
 

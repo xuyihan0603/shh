@@ -1,5 +1,5 @@
 const MEALS = { lunch: '午餐', dinner: '晚餐' }
-const ROLES = { front: '前台', manager: '店长（管理员）', sales: '客户经理', finance: '财务', pending: '待分配' }
+const ROLES = { sales: '营销', finance: '财务', manager: '店长', admin: '管理员', pending: '待分配' }
 const STATUSES = { booked: '已预订', arrived: '已到店', cancelled: '已取消', settled: '已结账' }
 const TABLE_TYPES = { hall: '散台', room: '包间' }
 const TYPES = [
@@ -28,11 +28,15 @@ function dateLabel(value, today) {
 }
 
 function canBook(role) {
-  return role === 'front' || role === 'manager' || role === 'sales'
+  return canManageOrders(role) || role === 'sales'
 }
 
-function canWalkIn(role) {
-  return role === 'front' || role === 'manager'
+function canManageOrders(role) {
+  return role === 'admin' || role === 'manager'
+}
+
+function canViewReports(role) {
+  return canManageOrders(role) || role === 'finance'
 }
 
 function staffCode(id) {
@@ -58,17 +62,24 @@ function isPhone(value) {
   return /^\+?\d{7,15}$/.test(value)
 }
 
+function formatCapacity(min, max) {
+  if (max == null) return '容量待补'
+  if (min == null) return `最多 ${max} 人`
+  return min === max ? `${max} 人` : `${min}–${max} 人`
+}
+
 function presentTables(tables, orderId) {
   return tables.map(table => {
     const own = Boolean(orderId && table.orderId === orderId)
     const status = own ? 'own' : (table.orderStatus || (table.orderId ? 'booked' : 'open'))
-    const capacity = table.capacity == null ? '' : table.capacity + '座'
+    const typeLabel = table.id === '卡1' && table.type === 'hall' ? '卡座' : TABLE_TYPES[table.type]
     return {
       ...table,
       status,
       statusLabel: own ? '本单桌位' : (STATUSES[status] || '空桌'),
-      deskMeta: [table.floor, TABLE_TYPES[table.type], capacity].filter(Boolean).join(' · '),
-      capacityLabel: capacity || '容量待补',
+      typeLabel,
+      deskMeta: [table.floor, typeLabel].filter(Boolean).join(' · '),
+      capacityLabel: formatCapacity(table.minCapacity, table.capacity),
       available: !table.orderId || own,
     }
   })
@@ -109,7 +120,7 @@ function bookingUrl(date, meal, options = {}) {
 }
 
 module.exports = {
-  MEALS, ROLES, TYPES, currentMeal, shiftDate, dateLabel, canBook, canWalkIn, staffCode,
-  formatMoney, readAmount, phoneInput, isPhone, presentTables, floorOptions,
+  MEALS, ROLES, TYPES, currentMeal, shiftDate, dateLabel, canBook, canManageOrders, canViewReports, staffCode,
+  formatMoney, readAmount, phoneInput, isPhone, formatCapacity, presentTables, floorOptions,
   presentOrder, errorMessage, orderUrl, bookingUrl,
 }

@@ -63,7 +63,7 @@ test('同餐段的一单多桌同时占用，失败的抢桌和换桌保留既�
   assert.throws(() => execute(state, 'front', 'cancel', { id: first.id, version: first.version }), { code: 'VERSION_CONFLICT' })
 })
 
-test('其他销售仅能查看遮号订单，前台代改保留接单人和操作记录', () => {
+test('其他营销员工仅能查看遮号订单，店长代改保留接单人和操作记录', () => {
   const state = readyStore()
   const date = today()
   const order = execute(state, 'sales1', 'save', booking(date, { deposit: '200.25', depositMethod: '微信' }))
@@ -84,7 +84,7 @@ test('其他销售仅能查看遮号订单，前台代改保留接单人和操�
     id: order.id, version: order.version, tableIds: ['202'], deposit: 300, depositMethod: '现金',
   })
   execute(state, 'front', 'cancel', { id: order.id, version: changed.version })
-  state.staff.find(staff => staff.id === 'front').name = '前台新姓名'
+  state.staff.find(staff => staff.id === 'front').name = '店长新姓名'
   const audited = execute(state, 'manager', 'order', { id: order.id })
   assert.equal(audited.ownerId, 'sales1')
   assert.equal(audited.createdDate, date)
@@ -96,7 +96,7 @@ test('其他销售仅能查看遮号订单，前台代改保留接单人和操�
   assert.equal(audited.logs.at(-1).action, '取消订单')
 })
 
-test('前台散客只填桌位和人数即可到店，在日报中单列', () => {
+test('店长散客只填桌位和人数即可到店，在日报中单列', () => {
   const state = readyStore()
   const date = today()
   const walkin = execute(state, 'front', 'save', { kind: 'walkin', tableIds: ['101'], guests: 4 })
@@ -131,7 +131,7 @@ test('日报按用餐日和原接单人统计，已抵扣订金单列且不重�
   let report = execute(state, 'finance', 'report', { date })
   assert.deepEqual(report.total, { orderCount: 1, tableCount: 2, amount: 0, pending: 1, deposit: 500 })
 
-  // The same records must survive JSON storage between the front desk and the report.
+  // The same records must survive JSON storage between check-in and the report.
   state = JSON.parse(JSON.stringify(state))
   const arrived = execute(state, 'front', 'arrive', { id: order.id, version: order.version })
   const settled = execute(state, 'front', 'settle', { id: order.id, version: arrived.version, amount: 2400 })
@@ -151,6 +151,35 @@ test('日报按用餐日和原接单人统计，已抵扣订金单列且不重�
   assert.deepEqual(yesterday.total, { orderCount: 0, tableCount: 0, amount: 0, pending: 0, deposit: 0 })
   assert.deepEqual(yesterday.details, [])
   assert.deepEqual(execute(state, 'finance', 'report', { date, basis: 'created' }), report)
+})
+
+test('财务补录缺失的消费金额，保留订金和遮号，已录金额由店长更正', () => {
+  const state = readyStore()
+  const date = today()
+  const order = execute(state, 'sales1', 'save', booking(date, {
+    deposit: 500, depositMethod: '微信', notes: '生日桌',
+  }))
+  const arrival = execute(state, 'front', 'arrive', { id: order.id, version: order.version })
+  const input = { id: order.id, version: arrival.version }
+  const pending = execute(state, 'finance', 'report', { date }).details[0]
+  assert.equal(pending.canSettle, true)
+  assert.equal(pending.phone, '138****1234')
+  assert.throws(() => execute(state, 'finance', 'save', { ...input, deposit: 20 }), { code: 'FORBIDDEN' })
+  assert.throws(() => execute(state, 'finance', 'cancel', input), { code: 'FORBIDDEN' })
+  assert.throws(() => execute(state, 'finance', 'settle', { ...input, version: order.version, amount: 2400 }), { code: 'VERSION_CONFLICT' })
+
+  const settled = execute(state, 'finance', 'settle', { ...input, amount: 2400, deposit: 0, notes: '替换' })
+  assert.equal(settled.status, 'settled')
+  assert.equal(settled.phone, '138****1234')
+  assert.equal(settled.canSettle, false)
+  assert.equal(settled.deposit, 500)
+  assert.equal(settled.notes, '生日桌')
+  const adjustment = { id: order.id, version: settled.version, amount: 2450 }
+  assert.throws(() => execute(state, 'finance', 'settle', adjustment), { code: 'VALIDATION' })
+  assert.equal(execute(state, 'front', 'settle', adjustment).amount, 2450)
+  assert.deepEqual(execute(state, 'finance', 'report', { date }).total, {
+    orderCount: 1, tableCount: 1, amount: 2450, pending: 0, deposit: 500,
+  })
 })
 
 test('月报按用餐年月汇总跨月接单，保留员工明细和金额精度', () => {

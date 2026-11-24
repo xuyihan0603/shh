@@ -1,6 +1,6 @@
 const { call, today, openAccess } = require('../../lib/api')
 const {
-  ROLES, TYPES, currentMeal, shiftDate, dateLabel, canBook, canWalkIn, presentTables,
+  ROLES, TYPES, currentMeal, shiftDate, dateLabel, canBook, canManageOrders, presentTables,
   floorOptions, errorMessage, orderUrl, bookingUrl,
 } = require('../../lib/reception')
 
@@ -81,7 +81,7 @@ Page({
         today: currentDate,
         dateLabel: dateLabel(this.data.date, currentDate),
         canCreate: canBook(me.role),
-        canRegister: canWalkIn(me.role),
+        canRegister: canManageOrders(me.role),
         contextReady: true,
       })
       await this.loadBoard()

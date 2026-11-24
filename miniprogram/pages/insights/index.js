@@ -1,5 +1,6 @@
 const { call, today, openAccess } = require('../../lib/api')
 const { SEGMENTS } = require('../../lib/customer-segments')
+const { canViewReports } = require('../../lib/reception')
 
 function totalFor(counts) {
   return SEGMENTS.reduce((sum, { id }) => sum + counts[id], 0)
@@ -42,10 +43,10 @@ Page({
         const { me } = await call('bootstrap')
         if (requestId !== this.requestId) return
         if (me.role === 'pending') return openAccess()
-        if (me.nameBound === false || !['manager', 'finance'].includes(me.role)) {
+        if (me.nameBound === false || !canViewReports(me.role)) {
           this.actorKey = ''
           this.setData({ loading: false, needsAccount: true, error: me.nameBound === false
-            ? '请先在「我的」中绑定姓名。' : '仅店长和财务可以查看客群分析。' })
+            ? '请先在「我的」中绑定姓名。' : '当前职位无法查看客群分析。' })
           return
         }
         const actorKey = [me.id, me.role].join('/')

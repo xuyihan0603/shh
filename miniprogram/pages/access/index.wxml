@@ -12,7 +12,7 @@
   <block wx:else>
     <view class="store-card">
       <view class="store-heading">等待分配权限</view>
-      <view class="store-caption access-description">{{me.nameBound ? '请把姓名和登记编号发给店长。权限分配后，刷新即可进入。' : '请填写姓名，再把登记编号发给店长分配权限。'}}</view>
+      <view class="store-caption access-description">{{me.nameBound ? '请把姓名和登记编号发给管理员。权限分配后，刷新即可进入。' : '请填写姓名，再把登记编号发给管理员分配权限。'}}</view>
       <view class="access-registration">
         <view wx:if="{{me.nameBound}}">{{me.name}}</view>
         <view>登记编号 <text user-select>{{code}}</text></view>

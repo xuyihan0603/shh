@@ -106,7 +106,7 @@
 
 .booking-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10rpx;
 }
 
@@ -119,7 +119,7 @@
   width: 100%;
   min-height: 106rpx;
   margin: 0;
-  padding: 12rpx 14rpx;
+  padding: 11rpx 8rpx;
   border: 1rpx solid #d5e4e4;
   border-radius: 13rpx;
   background: #f7fbfb;
@@ -151,18 +151,21 @@
 }
 
 .booking-table-name {
-  overflow: hidden;
   max-width: 100%;
   font-size: 26rpx;
   font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
 }
 
 .booking-table-meta {
   margin-top: 4rpx;
   color: #49646b;
   font-size: 22rpx;
+}
+
+.booking-table-state-label {
+  color: #49646b;
+  font-size: 21rpx;
 }
 
 .booking-table-owner {

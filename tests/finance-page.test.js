@@ -111,13 +111,18 @@ test('月报补录后返回保留日期和员工待补筛选，切换账号后�
   assert.equal(report.data.pendingOnly, false)
   assert.equal(report.data.canViewInsights, true)
   const booked = report.data.details.find(order => order.status === 'booked')
-  const readOnly = await orderFromReport(booked.id)
-  assert.equal(readOnly.data.order.status, 'booked')
-  assert.equal(readOnly.data.order.canSettle, false)
-  assert.equal(readOnly.data.amountOpen, false)
+  const supplement = await orderFromReport(booked.id)
+  assert.equal(supplement.data.order.status, 'booked')
+  assert.equal(supplement.data.order.canEdit, false)
+  assert.equal(supplement.data.order.canSettle, true)
+  assert.equal(supplement.data.amountOpen, true)
+  supplement.changeAmount({detail: {value: '120'}})
+  await supplement.saveAmount()
+  assert.equal(supplement.data.order.amount, 120)
+  assert.equal(supplement.data.order.canSettle, false)
 
   report.onHide()
-  actor = 'front'
+  actor = 'sales1'
   await report.onShow()
   assert.equal(report.data.report, null)
   assert.equal(report.data.details.length, 0)

@@ -52,6 +52,6 @@ Page({
 
   openStaffRoles() {
     const { me, busy } = this.data
-    if (!busy && me?.nameBound && me.role === 'manager') wx.navigateTo({ url: '/pages/staff/index' })
+    if (!busy && me?.nameBound && me.role === 'admin') wx.navigateTo({ url: '/pages/staff/index' })
   },
 })

@@ -34,6 +34,7 @@ function cloudClient(version, respond) {
       },
     },
     switchTab({ url }) { navigation.push(url) },
+    navigateTo({ url }) { navigation.push(url) },
     reLaunch({ url, complete }) { navigation.push(url); complete() },
     showToast() {},
   }
@@ -102,7 +103,7 @@ test('多个操作共用微信会话，过期后重新登记一次并重试', as
       return failure(401, 'UNAUTHORIZED', '会话已失效')
     }
     assert.equal(token(request), 'Bearer session-' + issued)
-    return ok({ me: { role: 'front' } })
+    return ok({ me: { role: 'manager' } })
   })
 
   await Promise.all([api.call('bootstrap'), api.call('board')])
@@ -143,7 +144,7 @@ test('待分配页登记姓名，首绑口令错误保留原会话，绑定成�
       case '/auth/wechat/bind-admin':
         assert.equal(token(request), 'Bearer ' + current)
         if (request.data.password !== 'test-management-secret') return failure(401, 'AUTH_FAILED', '管理口令不正确')
-        me = { ...me, id: 'manager', role: 'manager' }
+        me = { ...me, id: 'manager', role: 'admin' }
         current = 'admin-token'
         return ok({ token: current, me })
       default: assert.fail('意外请求 ' + request.path)
@@ -174,19 +175,19 @@ test('待分配页登记姓名，首绑口令错误保留原会话，绑定成�
   assert.equal(page.data.canBindAdmin, false)
   assert.equal(page.data.password, '')
   assert.deepEqual(client.navigation, ['/pages/account/index'])
-  assert.equal((await client.api.call('bootstrap')).me.role, 'manager')
+  assert.equal((await client.api.call('bootstrap')).me.role, 'admin')
 })
 
-test('店长按登记编号分配员工权限，员工刷新后进入工作台，权限撤回时返回等待页', async () => {
-  const manager = { id: 'manager', name: '张明', nameBound: true, role: 'manager' }
+test('管理员可分配营销和店长职位，员工刷新后进入工作台，权限撤回时返回等待页', async () => {
+  const admin = { id: 'manager', name: '张明', nameBound: true, role: 'admin' }
   let staff = { id: 'wx_0123456789abcdef', name: '陈青', nameBound: true, role: 'pending' }
   const store = { name: '珊瑚海' }
   const adminClient = cloudClient('trial', request => {
     switch (request.path) {
       case '/health': return ok(healthy)
-      case '/auth/wechat': return ok({ token: 'admin-token', me: manager })
-      case '/api/bootstrap': return ok({ me: manager, store })
-      case '/api/staffRoles': return ok([manager, staff])
+      case '/auth/wechat': return ok({ token: 'admin-token', me: admin })
+      case '/api/bootstrap': return ok({ me: admin, store })
+      case '/api/staffRoles': return ok([admin, staff])
       case '/api/setStaffRole':
         assert.equal(token(request), 'Bearer admin-token')
         assert.equal(request.data.expectedRole, staff.role)
@@ -203,7 +204,7 @@ test('店长按登记编号分配员工权限，员工刷新后进入工作台�
       case '/api/bootstrap': return ok(staff.role === 'pending'
         ? { me: staff, canBindAdmin: false, staff: [], tables: [] }
         : { me: staff, store })
-      case '/api/order': return failure(403, 'ACCESS_PENDING', '请等待店长分配员工职位')
+      case '/api/order': return failure(403, 'ACCESS_PENDING', '请等待管理员分配员工职位')
       default: assert.fail('意外请求 ' + request.path)
     }
   })
@@ -212,11 +213,16 @@ test('店长按登记编号分配员工权限，员工刷新后进入工作台�
   assert.equal(waiting.data.canBindAdmin, false)
   assert.deepEqual(staffClient.navigation, [])
 
+  const adminAccount = pageFor('account', adminClient)
+  await adminAccount.onShow()
+  adminAccount.openStaffRoles()
+  assert.deepEqual(adminClient.navigation, ['/pages/staff/index'])
+
   const roster = pageFor('staff', adminClient)
   await roster.onShow()
   assert.equal(roster.data.staff[0].role, 'pending')
   assert.equal(roster.data.staff[0].code, waiting.data.code)
-  assert.equal(roster.data.roleOptions.some(option => option.role === 'manager'), false)
+  assert.deepEqual(Array.from(roster.data.roleOptions, option => option.role), ['sales', 'finance', 'manager', 'pending'])
 
   const target = { currentTarget: { dataset: { id: staff.id } } }
   const assign = async role => {
@@ -228,6 +234,13 @@ test('店长按登记编号分配员工权限，员工刷新后进入工作台�
   await assign('sales')
   assert.equal(staff.role, 'sales')
   await waiting.refresh()
+  assert.deepEqual(staffClient.navigation, ['/pages/index/index'])
+
+  await assign('manager')
+  const managerAccount = pageFor('account', staffClient)
+  await managerAccount.onShow()
+  assert.equal(managerAccount.data.role, '店长')
+  managerAccount.openStaffRoles()
   assert.deepEqual(staffClient.navigation, ['/pages/index/index'])
 
   await assign('pending')

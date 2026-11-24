@@ -1,5 +1,5 @@
 const { call, today, openAccess, openReport } = require('../../lib/api')
-const { MEALS, orderUrl } = require('../../lib/reception')
+const { MEALS, orderUrl, canViewReports } = require('../../lib/reception')
 
 const statuses = { booked: '已预订', arrived: '已到店', settled: '已结账', cancelled: '已取消' }
 const ORDERS_PER_PAGE = 40
@@ -114,11 +114,10 @@ Page({
         const changedAccount = this.account !== account
         if (changedAccount) this.dateMode = ''
         this.account = account
-        const canReport = me.role === 'manager' || me.role === 'finance'
         this.setData({
           ...(changedAccount ? { ...allOrders, period: 'day' } : {}),
           contextReady: true,
-          canViewInsights: canReport && me.nameBound === true,
+          canViewInsights: canViewReports(me.role) && me.nameBound === true,
         })
       }
       const { period } = this.data

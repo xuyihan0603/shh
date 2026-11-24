@@ -1,0 +1,65 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { execute } = require('../miniprogram/lib/domain')
+const { openStore } = require('../server/database')
+const { ADMIN_ID } = require('../server/store-rules')
+
+test('打开已有门店会更正旧桌号并保留预订占用和自定义桌位', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shh-layout-test-'))
+  let store
+  t.after(() => {
+    store?.close()
+    for (const file of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, file))
+    fs.rmdirSync(directory)
+  })
+
+  store = openStore(directory, { adminPassword: 'test-layout-only' })
+  const snapshot = store.read()
+  delete snapshot.pilotTableLayoutApplied
+  Object.assign(snapshot.staff[0], { name: '徐领班', nameBound: true })
+  const extra = { id: 'terrace', name: '露台桌', floor: '露台', type: 'hall', capacity: 12 }
+  snapshot.tables = [
+    { id: '204', name: '204', floor: '二楼', type: 'unknown', capacity: null },
+    { id: '卡1', name: '卡1', floor: '待确认', type: 'unknown', capacity: null },
+    { id: '阳光房B1', name: '阳光房B1', floor: '待确认', type: 'unknown', capacity: null },
+    { id: '309', name: '309', floor: '三楼', type: 'room', capacity: 5 },
+    extra,
+  ]
+  const date = '2030-01-05'
+  const order = execute(snapshot, ADMIN_ID, 'save', {
+    date, meal: 'dinner', time: '18:00', tableIds: ['204', '卡1'],
+    guests: 14, contact: '测试联系人', phone: '13800000001',
+  })
+  store.db.prepare('UPDATE business SET snapshot=? WHERE id=1').run(JSON.stringify(snapshot))
+  store.close()
+  store = openStore(directory)
+
+  const board = store.run(ADMIN_ID, 'board', { date, meal: 'dinner' })
+  const corrected = board.tables.find(table => table.id === '203')
+  assert.deepEqual(corrected, {
+    id: '203', name: '203', floor: '二楼', type: 'room', minCapacity: 12, capacity: 14,
+    orderId: order.id, orderStatus: 'booked', ownerName: '徐领班',
+  })
+  assert.ok(!board.tables.some(table => table.id === '204'))
+  assert.equal(board.tables.find(table => table.id === '卡1').orderId, order.id)
+  assert.equal(board.tables.find(table => table.id === '卡1').floor, '一楼')
+  assert.equal(board.tables.find(table => table.id === '阳光房B1').floor, '二楼')
+  assert.equal(board.tables.find(table => table.id === '309').capacity, 5)
+  assert.deepEqual(store.read().tables.at(-1), extra)
+  assert.deepEqual(store.run(ADMIN_ID, 'order', { id: order.id }), {
+    ...order, tableIds: ['203', '卡1'], tableNames: ['203', '卡1'],
+  })
+
+  const { tables } = store.run(ADMIN_ID, 'bootstrap')
+  const invalid = tables.map(table => table.id === '203' ? { ...table, minCapacity: 15 } : table)
+  assert.throws(() => store.run(ADMIN_ID, 'configure', { tables: invalid }), { code: 'VALIDATION' })
+
+  const edited = tables.map(table => table.id === '203' ? { ...table, minCapacity: 11 } : table)
+  store.run(ADMIN_ID, 'configure', { tables: edited })
+  store.close()
+  store = openStore(directory)
+  assert.equal(store.run(ADMIN_ID, 'bootstrap').tables.find(table => table.id === '203').minCapacity, 11)
+})

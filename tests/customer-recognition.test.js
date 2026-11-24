@@ -145,7 +145,7 @@ test('客群统计使用上海日期，仅供店长和财务查询最近 4 周�
     startDate: '2024-11-08', endDate: '2024-11-14', new: 0, potential: 0, vvip: 0,
   })
 
-  for (const id of ['front', 'sales1']) {
+  for (const id of ['sales1', 'sales2']) {
     assert.throws(() => execute(state, id, 'customerInsights', {}, instant), { code: 'FORBIDDEN' })
   }
   for (const data of [{ endDate: '2025-01-03' }, { endDate: '2024-02-30' }, { weeks: 6 }, { weeks: '4' }]) {

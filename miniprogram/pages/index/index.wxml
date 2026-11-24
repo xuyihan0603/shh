@@ -72,6 +72,7 @@
       <view wx:else class="board-grid">
         <button wx:for="{{visibleTables}}" wx:key="id" class="board-desk board-desk-{{item.status}} {{item.selected ? 'board-desk-selected' : ''}}" data-id="{{item.id}}" bindtap="tapTable" disabled="{{item.available && !canCreate}}">
           <view class="board-desk-name">{{item.name}}</view>
+          <view class="board-desk-capacity">{{item.capacityLabel}}</view>
           <view wx:if="{{item.deskMeta}}" class="board-desk-meta">{{item.deskMeta}}</view>
           <view class="board-desk-footer">
             <view class="rec-status rec-status-{{item.status}}">{{item.selected ? '已选' : item.statusLabel}}</view>

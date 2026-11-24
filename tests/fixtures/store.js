@@ -2,8 +2,8 @@ function seed() {
   return {
     store: { name: '示例门店', address: '示例路 88 号', phone: '010-55550100' },
     staff: [
-      { id: 'front', name: '前台', role: 'front' },
-      { id: 'manager', name: '店长', role: 'manager' },
+      { id: 'front', name: '店长', role: 'manager' },
+      { id: 'manager', name: '管理员', role: 'admin' },
       { id: 'sales1', name: '小李', role: 'sales' },
       { id: 'sales2', name: '小周', role: 'sales' },
       { id: 'finance', name: '财务', role: 'finance' },

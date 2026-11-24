@@ -1,7 +1,7 @@
 const api = require('../../lib/api')
 const { ROLES, staffCode, errorMessage } = require('../../lib/reception')
 
-const roleOptions = ['front', 'sales', 'finance', 'pending'].map(role => ({ role, label: ROLES[role] }))
+const roleOptions = ['sales', 'finance', 'manager', 'pending'].map(role => ({ role, label: ROLES[role] }))
 
 Page({
   data: {
@@ -38,10 +38,10 @@ Page({
       const { me } = await api.call('bootstrap')
       if (requestId !== this.requestId) return
       if (me.role === 'pending') return api.openAccess()
-      if (!me.nameBound || me.role !== 'manager') {
+      if (!me.nameBound || me.role !== 'admin') {
         this.setData({
           needsAccount: true,
-          error: me.nameBound ? '仅店长可分配员工权限。' : '请到「我的」绑定员工姓名。',
+          error: me.nameBound ? '仅管理员可分配员工权限。' : '请到「我的」绑定员工姓名。',
         })
         return
       }

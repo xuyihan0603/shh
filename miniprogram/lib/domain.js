@@ -3,9 +3,12 @@ const { shiftDate } = require('./reception')
 
 const SHANGHAI_OFFSET = 8 * 60 * 60 * 1000
 const MEALS = ['lunch', 'dinner']
-const ROLES = ['front', 'manager', 'sales', 'finance']
-const WECHAT_STAFF_ROLES = ['pending', 'front', 'sales', 'finance']
-const STAFF_ROLE_NAMES = ['前台', '店长', '客户经理', '财务', '销售', '员工', '待分配']
+// Existing orders and login records refer to the original administrator ID.
+const ADMIN_ID = 'manager'
+const STAFF_ROLES = ['sales', 'finance', 'manager']
+const ROLES = [...STAFF_ROLES, 'admin']
+const WECHAT_STAFF_ROLES = [...STAFF_ROLES, 'pending']
+const STAFF_ROLE_NAMES = ['营销', '财务', '店长', '管理员', '前台', '客户经理', '销售', '员工', '待分配']
 
 function shanghaiClock(instant) {
   return new Date(instant.getTime() + SHANGHAI_OFFSET).toISOString()
@@ -18,7 +21,7 @@ function today(instant = new Date()) {
 function seed() {
   return {
     ...require('./pilot').pilotLayout(),
-    staff: [{id:'manager', name:'店长', role:'manager', active:true, nameBound:false}],
+    staff: [{ id: ADMIN_ID, name: '管理员', role: 'admin', active: true, nameBound: false }],
     orders: [],
     nextOrderNumber: 1,
   }
@@ -120,7 +123,7 @@ function maskPhone(phone) {
 }
 
 function handlesStoreOrders(actor) {
-  return actor.role === 'front' || actor.role === 'manager'
+  return actor.role === 'manager' || actor.role === 'admin'
 }
 
 function ownsOrder(actor, order) {
@@ -139,7 +142,7 @@ function permissions(actor, order) {
     canEdit: editable,
     canCancel: editable,
     canArrive: reception && order.status === 'booked',
-    canSettle: reception && order.status !== 'cancelled',
+    canSettle: order.status !== 'cancelled' && (reception || (actor.role === 'finance' && order.amount === null)),
   }
 }
 
@@ -170,9 +173,9 @@ function requireStaffName(actor) {
   if (actor.nameBound !== true) fail('NAME_REQUIRED', '请到「我的」填写员工姓名')
 }
 
-function requireStaffManager(actor) {
+function requireAdmin(actor) {
   requireStaffName(actor)
-  if (actor.role !== 'manager') fail('FORBIDDEN', '仅店长可维护员工账号')
+  if (actor.role !== 'admin') fail('FORBIDDEN', '仅管理员可维护员工账号')
 }
 
 function isStaffId(id) {
@@ -185,15 +188,15 @@ function staffRoleProfile(person) {
 }
 
 function manageStaffRoles(state, actor, action, data) {
-  requireStaffManager(actor)
+  requireAdmin(actor)
   if (action === 'staffRoles') return state.staff.map(staffRoleProfile)
 
   const { id, role, expectedRole } = data
-  const choices = state.environment === 'wechat-test' ? WECHAT_STAFF_ROLES : ROLES
+  const choices = state.environment === 'wechat-test' ? WECHAT_STAFF_ROLES : STAFF_ROLES
   if (!isStaffId(id) || !choices.includes(role) || !choices.includes(expectedRole)) {
     fail('VALIDATION', '员工职位资料有误')
   }
-  if (id === actor.id) fail('VALIDATION', '店长不能修改自己的职位')
+  if (id === actor.id) fail('VALIDATION', '管理员不能修改自己的职位')
   const person = state.staff.find(staff => staff.id === id)
   if (!person) fail('NOT_FOUND', '未找到该员工账号')
   if (person.role !== expectedRole) fail('VERSION_CONFLICT', '员工职位已变更，请刷新后重试')
@@ -204,7 +207,7 @@ function manageStaffRoles(state, actor, action, data) {
 
 function isStaffRoleName(name) {
   const lower = name.toLowerCase()
-  return STAFF_ROLE_NAMES.includes(name) || ROLES.includes(lower) || lower === 'pending'
+  return STAFF_ROLE_NAMES.includes(name) || ROLES.includes(lower) || ['front', 'pending'].includes(lower)
 }
 
 function suggestStaffName(actor) {
@@ -217,7 +220,7 @@ function bindStaffName(actor, data) {
   const name = readText(data.name, '员工姓名', true)
   if (name.length > 40 || /[\x00-\x1F\x7F-\x9F]/.test(name)) fail('VALIDATION', '员工姓名格式不正确')
   if (isStaffRoleName(name)) fail('VALIDATION', '请填写本人姓名')
-  if (actor.nameBound === true && actor.name !== name) fail('FORBIDDEN', '姓名已绑定，请联系店长修改')
+  if (actor.nameBound === true && actor.name !== name) fail('FORBIDDEN', '姓名已绑定，请联系管理员修改')
   if (data.servicePhone !== undefined) {
     actor.servicePhone = readServicePhone(data.servicePhone, actor.nameBound !== true && actor.role !== 'finance')
   }
@@ -249,7 +252,8 @@ function notificationContext(state, actor, data) {
 function mutationTarget(state, actor, data, permission) {
   const order = findOrder(state, data.id)
   const canManage = permission === 'canEdit' || permission === 'canCancel'
-    ? managesOrder(actor, order) : handlesStoreOrders(actor)
+    ? managesOrder(actor, order)
+    : handlesStoreOrders(actor) || (permission === 'canSettle' && actor.role === 'finance')
   if (!canManage) fail('FORBIDDEN', '当前岗位无权操作这笔订单')
   if (order.version !== data.version) fail('VERSION_CONFLICT', '订单已更新，请刷新后再操作')
   if (!permissions(actor, order)[permission]) fail('VALIDATION', '当前订单状态不能执行此操作')
@@ -304,7 +308,7 @@ function listOrders(state, actor, data) {
 }
 
 function listStoreOrders(state, actor, data) {
-  if (actor.role !== 'manager') fail('FORBIDDEN', '仅店长可查看跨日期的全店订单')
+  if (!handlesStoreOrders(actor)) fail('FORBIDDEN', '仅店长和管理员可查看跨日期的全店订单')
   const meal = data.meal ? readMeal(data.meal) : ''
   const end = data.beforeId ? state.orders.findIndex(order => order.id === data.beforeId) : state.orders.length
   if (end < 0) fail('VALIDATION', '订单列表已更新，请重新加载')
@@ -381,7 +385,7 @@ function emptyCustomerCounts() {
 }
 
 function forCustomerInsights(state, actor, data, instant) {
-  if (actor.role !== 'manager' && actor.role !== 'finance') fail('FORBIDDEN', '仅店长和财务可查看客群分析')
+  if (!handlesStoreOrders(actor) && actor.role !== 'finance') fail('FORBIDDEN', '仅财务、店长和管理员可查看客群分析')
   const currentDate = today(instant)
   const endDate = data.endDate === undefined ? currentDate : readDate(data.endDate, '统计截止日期')
   if (endDate > currentDate) fail('VALIDATION', '统计截止日期不能晚于今天')
@@ -480,7 +484,7 @@ function saveOrder(state, actor, data, instant, importing = false) {
   const kind = value('kind', 'booking')
   if (kind !== 'booking' && kind !== 'walkin') fail('VALIDATION', '请选择预订或散客')
   if (current && current.kind !== kind) fail('VALIDATION', '建单后不能修改订单类型')
-  if (kind === 'walkin' && !handlesStoreOrders(actor)) fail('FORBIDDEN', '仅前台或店长可以登记散客')
+  if (kind === 'walkin' && !handlesStoreOrders(actor)) fail('FORBIDDEN', '仅店长和管理员可以登记散客')
 
   const clock = shanghaiClock(instant)
   const currentDate = clock.slice(0, 10)
@@ -504,7 +508,7 @@ function saveOrder(state, actor, data, instant, importing = false) {
     (retainHandler && current.depositHandler) || actor.name) : ''
 
   const owner = data.ownerId === undefined ? actor : state.staff.find(staff => staff.id === data.ownerId)
-  if (!owner || owner.role === 'finance' || owner.role === 'pending') fail('VALIDATION', '原接单人需要是前台、店长或客户经理')
+  if (!owner || (!handlesStoreOrders(owner) && owner.role !== 'sales')) fail('VALIDATION', '原接单人需要是营销、店长或管理员')
   const createdDate = data.createdDate === undefined ? currentDate : readDate(data.createdDate, '接单日期')
   if (originalAssignment && (createdDate > currentDate || createdDate > date)) {
     fail('VALIDATION', '接单日期不能晚于今天或用餐日期')
@@ -595,7 +599,7 @@ function inYuan(totals) {
 }
 
 function forReport(state, actor, data) {
-  if (actor.role !== 'finance' && actor.role !== 'manager') fail('FORBIDDEN', '仅财务和店长可以查看财务报表')
+  if (!handlesStoreOrders(actor) && actor.role !== 'finance') fail('FORBIDDEN', '仅财务、店长和管理员可查看财务报表')
   const date = readDate(data.date === undefined ? today() : data.date, '统计日期')
   const { period = 'day' } = data
   if (period !== 'day' && period !== 'month') fail('VALIDATION', '请选择日报或月报')
@@ -619,8 +623,13 @@ function forReport(state, actor, data) {
   }
 }
 
+function readTableCapacity(value, label) {
+  const raw = typeof value === 'string' ? value.trim() : value
+  return raw == null || raw === '' ? null : readPositiveInteger(raw, label)
+}
+
 function configure(state, actor, data) {
-  if (actor.role !== 'manager') fail('FORBIDDEN', '仅店长可以修改门店配置')
+  if (actor.role !== 'admin') fail('FORBIDDEN', '仅管理员可以修改门店配置')
   const storeInput = data.store === undefined ? state.store : { ...state.store, ...readObject(data.store, '门店资料') }
   const store = {
     name: readText(storeInput.name, '门店名称', true),
@@ -630,6 +639,7 @@ function configure(state, actor, data) {
   readPhone(store.phone)
   const tableInput = data.tables === undefined ? state.tables : data.tables
   if (!Array.isArray(tableInput)) fail('VALIDATION', '桌位清单格式不正确')
+  const previousTables = new Map(state.tables.map(table => [table.id, table]))
   const tableIds = new Set()
   const namesByFloor = new Set()
   const tables = tableInput.map(input => {
@@ -637,15 +647,20 @@ function configure(state, actor, data) {
     const id = readText(table.id, '桌位编号', true)
     const name = readText(table.name, '桌名', true)
     const floor = readText(table.floor, '楼层', true)
-    const rawCapacity = typeof table.capacity === 'string' ? table.capacity.trim() : table.capacity
-    const capacity = rawCapacity == null || rawCapacity === '' ? null : readPositiveInteger(rawCapacity, '桌位容量')
+    const capacity = readTableCapacity(table.capacity, '最多人数')
+    const previousMinimum = previousTables.get(id)?.minCapacity ?? null
+    const retainedMinimum = capacity !== null && previousMinimum <= capacity ? previousMinimum : null
+    const minCapacity = table.minCapacity === undefined ? retainedMinimum : readTableCapacity(table.minCapacity, '最少人数')
+    if (minCapacity !== null && (capacity === null || minCapacity > capacity)) {
+      fail('VALIDATION', '请填写最多人数，且不能少于最少人数')
+    }
     if (!['hall', 'room', 'unknown'].includes(table.type)) fail('VALIDATION', '请选择散台、包间或待补充')
     if (tableIds.has(id)) fail('VALIDATION', `桌位编号 ${id} 已存在`)
     const floorAndName = JSON.stringify([floor, name])
     if (namesByFloor.has(floorAndName)) fail('VALIDATION', `${floor}的桌名 ${name} 已存在`)
     tableIds.add(id)
     namesByFloor.add(floorAndName)
-    return { id, name, floor, type: table.type, capacity }
+    return { id, name, floor, type: table.type, minCapacity, capacity }
   })
   for (const order of state.orders) {
     if (order.tableIds.some(id => !tableIds.has(id))) fail('VALIDATION', '不能删除已有订单记录的桌位')
@@ -656,7 +671,7 @@ function configure(state, actor, data) {
 }
 
 function importOrders(state, actor, data, instant) {
-  if (actor.role !== 'manager') fail('FORBIDDEN', '仅店长可以录入存量预订')
+  if (!handlesStoreOrders(actor)) fail('FORBIDDEN', '仅店长和管理员可以录入存量预订')
   if (!Array.isArray(data.orders) || !data.orders.length) fail('VALIDATION', '请填写待录入的预订')
   const draft = { ...state, orders: state.orders.slice() }
   const orders = data.orders.map((item, index) => {
@@ -684,7 +699,7 @@ function execute(state, actorId, action, data = {}, instant = new Date()) {
     const me = accountProfile(actor)
     if (pending) return {
       me: { ...me, active: true }, nameSuggestion: '', staff: [], tables: [],
-      canBindAdmin: !state.staff.some(staff => staff.id === 'manager'),
+      canBindAdmin: !state.staff.some(staff => staff.id === ADMIN_ID),
     }
     return {
       store: { ...state.store }, me, nameSuggestion: me.nameBound ? '' : suggestStaffName(actor),
@@ -692,7 +707,7 @@ function execute(state, actorId, action, data = {}, instant = new Date()) {
       tables: me.nameBound ? state.tables.map(table => ({ ...table })) : [],
     }
   }
-  if (pending && action !== 'setServicePhone') fail('ACCESS_PENDING', '请等待店长分配员工职位')
+  if (pending && action !== 'setServicePhone') fail('ACCESS_PENDING', '请等待管理员分配员工职位')
   if (action === 'staffRoles' || action === 'setStaffRole') return manageStaffRoles(state, actor, action, data)
   requireStaffName(actor)
   switch (action) {
@@ -718,4 +733,4 @@ function execute(state, actorId, action, data = {}, instant = new Date()) {
   }
 }
 
-module.exports = { seed, execute, today, profile, requireStaffName, requireStaffManager, isStaffId, ROLES, normalizeServicePhone, readServicePhone }
+module.exports = { seed, execute, today, profile, requireStaffName, requireAdmin, isStaffId, ADMIN_ID, ROLES, normalizeServicePhone, readServicePhone }

@@ -280,8 +280,8 @@
 
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12rpx;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10rpx;
 }
 
 .board-desk {
@@ -293,7 +293,7 @@
   min-width: 0;
   min-height: 158rpx;
   margin: 0;
-  padding: 15rpx 13rpx 13rpx;
+  padding: 13rpx 10rpx 11rpx;
   border: 1rpx solid #dae4e1;
   border-radius: 15rpx;
   background: #fffefa;
@@ -336,19 +336,24 @@
 
 .board-desk-name {
   width: 100%;
-  font-size: 34rpx;
+  font-size: 30rpx;
   font-weight: 700;
   line-height: 1.2;
   overflow-wrap: break-word;
 }
 
+.board-desk-capacity,
 .board-desk-meta {
   width: 100%;
-  margin: 5rpx 0 12rpx;
+  margin-top: 4rpx;
   color: #495f65;
   font-size: 22rpx;
   overflow-wrap: break-word;
-  word-break: keep-all;
+}
+
+.board-desk-capacity {
+  color: #173640;
+  font-weight: 600;
 }
 
 .board-desk-footer {
@@ -358,6 +363,7 @@
   gap: 5rpx 8rpx;
   width: 100%;
   margin-top: auto;
+  padding-top: 8rpx;
 }
 
 .board-desk .rec-status {

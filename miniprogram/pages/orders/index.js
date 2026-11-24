@@ -1,5 +1,5 @@
 const { call, today, openAccess } = require('../../lib/api')
-const { currentMeal, dateLabel, canBook, presentOrder, errorMessage, orderUrl, bookingUrl, phoneInput, isPhone } =
+const { currentMeal, dateLabel, canBook, canManageOrders, presentOrder, errorMessage, orderUrl, bookingUrl, phoneInput, isPhone } =
   require('../../lib/reception')
 
 const EMPTY_RESULTS = { customer: null, orders: [], total: 0, next: '', loadingMore: false, moreError: '' }
@@ -66,7 +66,7 @@ Page({
         return
       }
       const canLookup = canBook(me.role)
-      const canViewAll = me.role === 'manager'
+      const canViewAll = canManageOrders(me.role)
       const actorKey = [me.id, me.role].join('/')
       const sameActor = actorKey === this.actorKey
       const currentDate = today()

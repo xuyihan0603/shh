@@ -110,7 +110,7 @@ Page({
       const details = await api.call('notificationDetails', { id })
       if (this.requestId !== requestId) return
       const { card, sms } = details
-      if (!card || (smsOnly && !sms)) throw new Error('预订消息资料不完整，请联系店长。')
+      if (!card || (smsOnly && !sms)) throw new Error('预订消息资料不完整，请联系店长或管理员。')
       const preview = { loading: false, card, message: invitationText(card) }
       if (smsOnly) {
         const defaultMode = defaultSmsMode()

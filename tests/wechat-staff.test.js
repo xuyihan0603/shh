@@ -36,7 +36,7 @@ test('微信测试入口通过平台身份登记，健康检查和请求体都�
   const connect = (requestHeaders, body) => fetch(base + '/auth/wechat', {
     method: 'POST', headers: requestHeaders, body: JSON.stringify(body),
   })
-  const suppliedIdentity = { openId: 'forged-employee-open-id', role: 'manager' }
+  const suppliedIdentity = { openId: 'forged-employee-open-id', role: 'admin' }
   assert.equal((await connect({ 'content-type': 'application/json' }, suppliedIdentity)).status, 401)
   assert.equal((await connect({ ...headers, 'x-wx-source': '' }, suppliedIdentity)).status, 401)
   assert.equal((await connect({ ...headers, 'x-wx-appid': 'wx1111111111111111' }, suppliedIdentity)).status, 401)
@@ -71,17 +71,20 @@ test('待分配账号可登记姓名，获批前只看自己的资料且不能�
     assert.throws(() => call(employee.id, action), { code: 'ACCESS_PENDING' })
   }
 
-  state.staff.push({ id: 'manager', name: '王经理', role: 'manager', active: true, nameBound: true })
+  state.staff.push({ id: 'manager', name: '王经理', role: 'admin', active: true, nameBound: true })
   assert.equal(call(employee.id, 'bootstrap').canBindAdmin, false)
   assert.equal(call('manager', 'bootstrap').staff.some(person => person.id === employee.id), false)
   const listed = call('manager', 'staffRoles').find(person => person.id === employee.id)
   assert.equal(listed.role, 'pending')
   const assignment = { id: employee.id, expectedRole: listed.role }
-  assert.throws(() => call('manager', 'setStaffRole', { ...assignment, role: 'manager' }), { code: 'VALIDATION' })
+  assert.throws(() => call('manager', 'setStaffRole', { ...assignment, role: 'admin' }), { code: 'VALIDATION' })
   assert.equal(call('manager', 'setStaffRole', { ...assignment, role: 'finance' }).role, 'finance')
-  assert.throws(() => call('manager', 'setStaffRole', { ...assignment, role: 'front' }), { code: 'VERSION_CONFLICT' })
+  assert.throws(() => call('manager', 'setStaffRole', { ...assignment, role: 'sales' }), { code: 'VERSION_CONFLICT' })
   assert.equal(call(employee.id, 'bootstrap').me.role, 'finance')
   assert.throws(() => call(employee.id, 'staffRoles'), { code: 'FORBIDDEN' })
-  assert.equal(call('manager', 'setStaffRole', { id: employee.id, expectedRole: 'finance', role: 'pending' }).role, 'pending')
+  assert.equal(call('manager', 'setStaffRole', { id: employee.id, expectedRole: 'finance', role: 'manager' }).role, 'manager')
+  assert.equal(call(employee.id, 'bootstrap').me.role, 'manager')
+  assert.throws(() => call(employee.id, 'setStaffRole', { id: employee.id, role: 'admin', expectedRole: 'manager' }), { code: 'FORBIDDEN' })
+  assert.equal(call('manager', 'setStaffRole', { id: employee.id, expectedRole: 'manager', role: 'pending' }).role, 'pending')
   assert.throws(() => call(employee.id, 'report'), { code: 'ACCESS_PENDING' })
 })

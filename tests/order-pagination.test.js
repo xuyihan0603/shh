@@ -23,7 +23,7 @@ test('店长按创建顺序跨日期分页，插入新单后从旧游标继续�
   const latestFirst = lunchOrders.map(order => order.id).reverse()
   const ids = orders => orders.map(order => order.id)
 
-  assert.throws(() => execute(state, 'front', 'storeOrders', { meal: 'lunch' }), { code: 'FORBIDDEN' })
+  assert.equal(execute(state, 'front', 'storeOrders', { meal: 'lunch' }).total, 28)
   assert.throws(() => execute(state, 'sales1', 'storeOrders', { meal: 'lunch' }), { code: 'FORBIDDEN' })
   const firstPage = managerOrders()
   assert.equal(firstPage.total, 28)

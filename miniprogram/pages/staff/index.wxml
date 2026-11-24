@@ -16,7 +16,7 @@
           <text wx:if="{{item.self || item.active === false}}" class="staff-marker {{item.self ? 'staff-self' : ''}}">{{item.self ? '本人' : '已停用'}}</text>
         </view>
         <view class="staff-position">
-          <text class="staff-role {{item.role === 'manager' || item.role === 'pending' ? 'staff-role-manager' : ''}}">{{item.roleLabel}}</text>
+          <text class="staff-role {{item.role === 'admin' || item.role === 'pending' ? 'staff-role-manager' : ''}}">{{item.roleLabel}}</text>
           <button wx:if="{{!item.self && editId !== item.id}}" class="store-link staff-edit" data-id="{{item.id}}" bindtap="editRole" disabled="{{saving}}">{{item.role === 'pending' ? '分配职位' : '调整职位'}} <text class="staff-next" aria-hidden="true">›</text></button>
         </view>
       </view>

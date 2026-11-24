@@ -8,7 +8,7 @@
     </view>
     <block wx:elif="{{card}}">
       <view wx:if="{{!card.servicePhone}}" class="rec-alert notify-notice">
-        {{card.serviceName || '原接单员工'}}的服务手机号未设置。请原接单员工到「我的 → 服务手机号」填写，也可请店长补全。
+        {{card.serviceName || '原接单员工'}}的服务手机号未设置。请原接单员工到「我的 → 服务手机号」填写，也可联系管理员。
       </view>
       <view wx:if="{{!smsOnly}}" class="rec-panel notify-panel">
         <view class="rec-title">消息正文</view>

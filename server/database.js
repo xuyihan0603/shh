@@ -2,7 +2,7 @@ const { DatabaseSync } = require('node:sqlite')
 const { randomBytes } = require('node:crypto')
 const fs = require('node:fs')
 const path = require('node:path')
-const { writes, fault, digest, passwordRecord, validateInitialPassword, loginResult, initialState, refreshState, applyAction } = require('./store-rules')
+const { ADMIN_ID, writes, fault, digest, passwordRecord, validateInitialPassword, loginResult, initialState, refreshState, applyAction } = require('./store-rules')
 const { describeSms, canSendSms } = require('./notifications')
 
 function openStore(directory, options = {}) {
@@ -53,7 +53,7 @@ function openStore(directory, options = {}) {
     const state = initialState()
     const initial = []
     for (const person of state.staff) {
-      const supplied = person.id === 'manager' && options.adminPassword
+      const supplied = person.id === ADMIN_ID && options.adminPassword
       if (supplied) validateInitialPassword(supplied)
       const password = supplied || randomBytes(15).toString('base64url')
       setPassword(person.id, password)
