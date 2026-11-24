@@ -8,7 +8,7 @@ const {pilotLayout} = require('../miniprogram/lib/pilot')
 const invitation = require('../miniprogram/lib/invitation')
 const {notificationDetails} = require('../server/notifications')
 
-function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}) {
+function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}, createInvitationImage = async () => 'wxfile://tmp/test.jpg') {
   const state = Object.assign(seed(), pilotLayout())
   const owner = state.staff.find(person => person.id === 'sales1')
   owner.nameBound = true
@@ -49,9 +49,15 @@ function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}) {
   let page
   runInNewContext(readFileSync(require.resolve('../miniprogram/pages/notify/index.js'), 'utf8'), {
     Page(definition) {page = definition}, wx,
-    require(name) {return name.endsWith('/api') ? api : invitation}
+    require(name) {
+      if (name.endsWith('/invitation-image')) return {createInvitationImage}
+      return name.endsWith('/api') ? api : invitation
+    }
   })
-  page.setData = values => Object.assign(page.data, values)
+  page.setData = (values, done) => { Object.assign(page.data, values); if (done) done() }
+  page.createSelectorQuery = () => ({
+    select() {return this}, fields() {return this}, exec(callback) {callback([{node: {}}])},
+  })
   page.onLoad({id: order.id, channel})
   return {page, wx, started, clipboard, cloudCalls, state, selectActor(id) {actor = id}}
 }
@@ -75,6 +81,7 @@ test('安卓和 iOS 点击一次后先复制完整正文，再仅用客人号码
     assert.match(clipboard[0].data, /餐位:二楼201包房、202包房\n人数10位！/)
     assert.match(clipboard[0].data, /🦞凌晨在东海，晚上在餐桌🦞\n\n小李专职为您服务：13800000002/)
     assert.match(clipboard[0].data, /珊瑚海全体员工期待您的光临!$/)
+    assert.match(clipboard[0].data, /本店地址:江学路381弄22号/)
     assert.equal(started.length, 0)
 
     clipboard[0].success()
@@ -159,19 +166,19 @@ test('离开页面后迟到的剪贴板回调不会打开短信，订单权限�
 
 test('手机短信页只提供一个按钮，预订消息页保留微信分享和已启用的云短信', async () => {
   const template = readFileSync(require.resolve('../miniprogram/pages/notify/index.wxml'), 'utf8')
-  const [sms, share] = template.split('<block wx:if="{{smsOnly}}">')[1].split('<block wx:else>')
+  const channels = template.split('<block wx:if="{{smsOnly}}">')[1]
+  const splitAt = channels.indexOf('<block wx:else>')
+  const sms = channels.slice(0, splitAt), share = channels.slice(splitAt)
   assert.equal((sms.match(/<button\b/g) || []).length, 1)
   assert.match(sms, /复制原文并打开短信/)
   assert.match(share, /bindtap="openChat"/)
   assert.match(share, /bindtap="sendCloud"/)
   assert.doesNotMatch(template, /精简短信/)
 
-  const {page, wx, started, clipboard, cloudCalls} = smsPage('ios', 'message', {enabled: true})
+  const {page, wx, started, cloudCalls} = smsPage('ios', 'message', {enabled: true})
   let confirmation
   wx.showModal = options => { confirmation = options.success }
   await page.load()
-  page.copy()
-  clipboard[0].success()
   assert.equal(started.length, 0)
   assert.equal(page.data.cloudEnabled, true)
 
@@ -183,12 +190,16 @@ test('手机短信页只提供一个按钮，预订消息页保留微信分享�
   assert.equal(page.data.cloudStatus, 'accepted')
 })
 
-test('微信预订草稿跨独立分包传递门头原图与地图，读取照片失败仍可分享定位文字', async () => {
-  const {page, wx} = smsPage('android', 'message')
+test('编辑后的预订文字和门头合为同一份草稿，发送一次图片并省略地址', async () => {
+  const images = new Map()
+  const {page, wx} = smsPage('android', 'message', {}, async (_, text, photo) => {
+    const path = 'wxfile://tmp/poster-' + images.size + '.jpg'
+    images.set(path, {text, photo})
+    return path
+  })
   const storage = new Map()
-  const files = new Map()
-  const original = readFileSync(require.resolve('../miniprogram/assets/storefront.jpg'))
-  let chatUrl, image, location
+  let chatUrl
+  const sent = []
   wx.env = {USER_DATA_PATH: 'wxfile://usr'}
   wx.canIUse = () => true
   wx.setStorageSync = (key, value) => storage.set(key, value)
@@ -196,33 +207,43 @@ test('微信预订草稿跨独立分包传递门头原图与地图，读取照�
   wx.removeStorageSync = key => storage.delete(key)
   wx.getWindowInfo = () => ({statusBarHeight: 24})
   wx.getFileSystemManager = () => ({
-    readFileSync: path => readFileSync(require.resolve('../miniprogram' + path)),
-    writeFileSync: (path, bytes) => files.set(path, bytes),
+    readdirSync: () => [], copyFileSync: (src, dest) => images.set(dest, images.get(src)),
+    unlinkSync: path => images.delete(path),
   })
   wx.openChatTool = options => {chatUrl = options.url; options.success()}
-  wx.shareImageToGroup = options => {image = files.get(options.imagePath); options.success()}
-  wx.openLocation = options => {location = options}
-  async function enterChat() {
-    await page.load()
-    page.openChat()
-    let chat
-    runInNewContext(readFileSync(require.resolve('../miniprogram/chat-tool/pages/send/index.js'), 'utf8'), {
-      wx, Page(definition) {chat = definition},
-    })
-    chat.setData = data => Object.assign(chat.data, data)
-    chat.onLoad({token: new URL(chatUrl, 'https://example.test').searchParams.get('token')})
-    assert.match(chat.data.text, /https:\/\/map\.wap\.qq\.com\/\S*uid=7237907789162872389/)
-    assert.equal(storage.size, 0)
-    return chat
-  }
-  const chat = await enterChat()
-  chat.shareStorefront()
-  assert.deepEqual(image, original)
-  chat.openStoreLocation()
-  assert.equal(location.latitude, 31.031818)
-  assert.equal(location.longitude, 121.211192)
-  wx.getFileSystemManager = () => {throw new Error('local storage unavailable')}
-  const fallback = await enterChat()
-  assert.equal(fallback.data.storefrontImagePath, '')
-  assert.equal(fallback.data.hasText, true)
+  wx.shareImageToGroup = options => {sent.push(images.get(options.imagePath)); options.success()}
+  await show(page)
+  const updatedText = page.data.message + '\n请提前十分钟到店。'
+  assert.doesNotMatch(updatedText, /本店地址|江学路|门店定位|https?:\/\//)
+  page.editMessage()
+  page.changeText({detail: {value: updatedText}})
+  page.finishEditing({currentTarget: {dataset: {}}})
+  await page.imageWork
+  page.openChat()
+  let chat
+  runInNewContext(readFileSync(require.resolve('../miniprogram/chat-tool/pages/send/index.js'), 'utf8'), {
+    wx, Page(definition) {chat = definition},
+  })
+  chat.setData = data => Object.assign(chat.data, data)
+  chat.onLoad({token: new URL(chatUrl, 'https://example.test').searchParams.get('token')})
+  assert.deepEqual(sent, [])
+  chat.shareInvitation()
+  assert.deepEqual(sent, [{text: updatedText, photo: '/assets/storefront.jpg'}])
+  assert.equal(storage.size, 0)
+  page.onHide()
+  await show(page)
+  assert.equal(page.data.message, updatedText)
+})
+
+test('离开页面时尚未导出的预订图不会重新显示或发起分享', async () => {
+  let resolveImage
+  const {page, wx} = smsPage('android', 'message', {}, () => new Promise(resolve => {resolveImage = resolve}))
+  wx.openChatTool = () => assert.fail('不能打开旧草稿')
+  await show(page)
+  assert.equal(page.data.generating, true)
+  page.onHide()
+  resolveImage('wxfile://tmp/obsolete.jpg')
+  await page.imageWork
+  assert.equal(page.data.invitationImagePath, '')
+  page.openChat()
 })

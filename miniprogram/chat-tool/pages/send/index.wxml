@@ -2,51 +2,20 @@
   <view class="navigation" style="padding-top: {{statusBarHeight}}px;">
     <button class="back" bindtap="goBack">返回</button>
   </view>
-  <scroll-view type="list" class="content" scroll-y>
-    <view class="composer">
-      <view class="title">发送微信预订</view>
-      <view class="hint">{{storefrontImagePath && canShareImage ? '文字和门头照片可分别发送到所选会话。' : '核对正文后发送到所选会话。'}}</view>
-      <form bind:submitToGroup="onSubmitToGroup">
-        <textarea
-          class="message"
-          value="{{text}}"
-          placeholder="输入或粘贴要发送的正文"
-          placeholder-class="placeholder"
-          aria-label="消息正文"
-          maxlength="{{-1}}"
-          auto-height
-          bindinput="onInput"
-        />
-        <button
-          class="action send"
-          form-type="submitToGroup"
-          need-show-entrance="{{false}}"
-          disabled="{{!hasText}}"
-        >发送文字</button>
-      </form>
-      <view wx:if="{{submitted}}" class="result">请在微信聊天中查看文字发送结果。</view>
-      <view wx:if="{{storefrontImagePath}}" class="section">
-        <image class="storefront" src="{{storefrontImagePath}}" mode="aspectFit" show-menu-by-longpress="{{true}}" aria-label="门头照片" />
-        <button
-          wx:if="{{canShareImage}}"
-          class="action secondary"
-          loading="{{sharingImage}}"
-          disabled="{{sharingImage}}"
-          bindtap="shareStorefront"
-        >发送门头照片</button>
-        <view wx:else class="details">当前微信无法发送门头照片，请返回预订页转发。</view>
-        <view wx:if="{{imageNotice}}" class="result">{{imageNotice}}</view>
-      </view>
-      <view wx:elif="{{storeLocation}}" class="details">要发送门头照片，可返回预订消息页，长按照片转发。</view>
-      <view wx:if="{{storeLocation}}" class="section location">
-        <view class="section-title">微信位置</view>
-        <text class="store-name" user-select>{{storeLocation.name}}</text>
-        <view wx:if="{{storeLocation.address}}" class="details">{{storeLocation.address}}</view>
-        <view class="details">要发送单独的位置卡片，请在所选会话点击「＋ → 位置 → 发送位置」，搜索店名并核对地址。</view>
-        <button class="action secondary" bindtap="copyStoreName">复制店名</button>
-        <button wx:if="{{canOpenLocation}}" class="action secondary" bindtap="openStoreLocation">查看门店位置</button>
-        <view wx:if="{{locationNotice}}" class="result">{{locationNotice}}</view>
-      </view>
+  <view wx:if="{{invitationImagePath}}" class="title">预订图预览</view>
+  <scroll-view wx:if="{{invitationImagePath}}" type="list" class="content" scroll-y>
+    <view class="preview">
+      <image class="invitation" src="{{invitationImagePath}}" mode="widthFix" aria-label="图文预订" binderror="onImageError" />
     </view>
   </scroll-view>
+  <view wx:if="{{canShareImage || shareNotice}}" class="footer">
+    <view wx:if="{{shareNotice}}" class="notice">{{shareNotice}}</view>
+    <button
+      wx:if="{{canShareImage}}"
+      class="send"
+      loading="{{shareState === 'sharing'}}"
+      disabled="{{shareState === 'sharing' || shareState === 'requested'}}"
+      bindtap="shareInvitation"
+    >发送图文预订</button>
+  </view>
 </view>

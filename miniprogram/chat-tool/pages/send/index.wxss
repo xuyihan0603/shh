@@ -27,113 +27,58 @@
   line-height: 44px;
 }
 
+.title {
+  flex-shrink: 0;
+  padding: 24rpx 28rpx 16rpx;
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
 .content {
   flex: 1;
   height: 0;
 }
 
-.composer {
-  padding: 36rpx 28rpx 64rpx;
-  padding-bottom: calc(64rpx + env(safe-area-inset-bottom));
+.preview {
+  padding: 0 28rpx 24rpx;
 }
 
-.title {
-  font-size: 44rpx;
-  font-weight: 700;
-}
-
-.hint {
-  margin: 14rpx 0 22rpx;
-  color: #405b63;
-  font-size: 28rpx;
-  line-height: 1.5;
-}
-
-.message {
-  box-sizing: border-box;
+.invitation {
+  display: block;
   width: 100%;
-  min-height: 360rpx;
-  padding: 24rpx;
   border: 1rpx solid #d5e1e1;
   border-radius: 16rpx;
   background: #fafcfb;
-  color: #103947;
-  font-size: 29rpx;
-  line-height: 1.65;
 }
 
-.placeholder {
-  color: #587079;
+.footer {
+  flex-shrink: 0;
+  padding: 20rpx 28rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #d5e1e1;
 }
 
-.action {
+.notice {
+  margin-bottom: 12rpx;
+  color: #405b63;
+  font-size: 27rpx;
+  line-height: 1.5;
+}
+
+.send {
   width: 100%;
-  margin: 24rpx 0 0;
+  margin: 0;
   border-radius: 14rpx;
+  background: #103947;
+  color: #f6f4ee;
   font-size: 29rpx;
   font-weight: 650;
   line-height: 84rpx;
 }
 
-.send {
-  background: #103947;
-  color: #f6f4ee;
-}
-
-.secondary {
-  background: #fafcfb;
-  border: 1rpx solid #d5e1e1;
-  color: #103947;
-}
-
-.action[disabled] {
+.send[disabled] {
   background: #e8f1f1;
   color: #587079;
-}
-
-.section {
-  margin-top: 36rpx;
-}
-
-.storefront {
-  display: block;
-  width: 100%;
-  height: 320rpx;
-  border-radius: 16rpx;
-  background: #e8f1f1;
-}
-
-.location {
-  padding-top: 28rpx;
-  border-top: 1rpx solid #d5e1e1;
-}
-
-.section-title {
-  margin-bottom: 12rpx;
-  font-size: 30rpx;
-  font-weight: 650;
-}
-
-.store-name {
-  font-size: 28rpx;
-  font-weight: 650;
-}
-
-.details {
-  margin-top: 12rpx;
-  color: #405b63;
-  font-size: 26rpx;
-  line-height: 1.5;
-}
-
-.result {
-  margin-top: 18rpx;
-  padding: 16rpx 20rpx;
-  border-radius: 12rpx;
-  background: #e8f1f1;
-  color: #103947;
-  font-size: 26rpx;
-  line-height: 1.55;
 }
 
 button::after {

@@ -1,67 +1,117 @@
 const DRAFT_KEY = 'shh.chatTool.draft'
 const DRAFT_MAX_AGE = 10 * 60 * 1000
 
+function isFresh(createdAt) {
+  const now = Date.now()
+  return Number.isFinite(createdAt) && createdAt <= now && now - createdAt < DRAFT_MAX_AGE
+}
+
+function readInvitation(token) {
+  try {
+    const draft = wx.getStorageSync(DRAFT_KEY)
+    if (!draft) return null
+
+    const fresh = isFresh(draft.createdAt)
+    const matched = typeof token === 'string' && /^[a-z0-9_-]+$/i.test(token) && token === draft.token
+    if (!fresh || matched) wx.removeStorageSync(DRAFT_KEY)
+    if (!fresh || !matched) return null
+
+    const folder = wx.env?.USER_DATA_PATH
+    const { invitationImagePath, createdAt } = draft
+    // Only the file named for this handoff belongs to the chat tool.
+    if (!folder || invitationImagePath !== `${folder}/shh-invite-${token}.jpg`) return null
+    return { invitationImagePath, createdAt }
+  } catch {
+    return null
+  }
+}
+
 Page({
   data: {
-    statusBarHeight: 0, text: '', hasText: false, submitted: false,
-    storefrontImagePath: '', canShareImage: false, sharingImage: false, imageNotice: '',
-    storeLocation: null, canOpenLocation: false, locationNotice: '',
+    statusBarHeight: 0,
+    invitationImagePath: '', canShareImage: false, shareState: '', shareNotice: '',
   },
 
   onLoad({ token } = {}) {
-    this.setData({ statusBarHeight: wx.getWindowInfo().statusBarHeight || 0 })
-    try {
-      const draft = wx.getStorageSync(DRAFT_KEY)
-      if (!draft) return
-      const now = Date.now()
-      const fresh = Number.isFinite(draft.createdAt) &&
-        draft.createdAt <= now && now - draft.createdAt < DRAFT_MAX_AGE
-      const matched = !!token && token === draft.token
-      if (!fresh || matched) wx.removeStorageSync(DRAFT_KEY)
-      if (fresh && matched && typeof draft.text === 'string') {
-        const { text } = draft
-        const storefrontImagePath = typeof draft.storefrontImagePath === 'string' ? draft.storefrontImagePath : ''
-        const storeLocation = typeof draft.storeLocation?.name === 'string' && draft.storeLocation.name.trim()
-          ? draft.storeLocation : null
-        const { latitude, longitude } = storeLocation || {}
-        const canOpenLocation = typeof wx.openLocation === 'function' &&
-          Number.isFinite(latitude) && Math.abs(latitude) <= 90 &&
-          Number.isFinite(longitude) && Math.abs(longitude) <= 180
-        this.setData({
-          text, hasText: !!text.trim(),
-          storefrontImagePath, canShareImage: typeof wx.shareImageToGroup === 'function',
-          storeLocation, canOpenLocation,
-        })
-      }
-    } catch {
-      // If the local draft is unavailable, the text can still be entered here.
+    this.invitation = readInvitation(token)
+    const invitationImagePath = this.invitation?.invitationImagePath || ''
+    const canShareImage = Boolean(invitationImagePath) && typeof wx.shareImageToGroup === 'function' &&
+      (typeof wx.canIUse !== 'function' || wx.canIUse('shareImageToGroup'))
+    let shareNotice = ''
+    if (!invitationImagePath) {
+      shareNotice = '当前没有可发送的预订图，请返回预订消息页重新生成。'
+    } else if (!canShareImage) {
+      shareNotice = '当前微信无法在这里发送图片，请返回预订消息页转发。'
     }
+    this.setData({
+      statusBarHeight: wx.getWindowInfo?.().statusBarHeight || 0,
+      invitationImagePath, canShareImage, shareNotice,
+    })
   },
 
-  onInput(event) {
-    const text = event.detail.value
-    this.setData({ text, hasText: !!text.trim(), submitted: false })
+  onShow() {
+    if (this.data.invitationImagePath && !this.shareAttempt) this.expireImage()
   },
 
-  onSubmitToGroup() {
-    this.setData({ submitted: true })
+  onUnload() {
+    this.unloaded = true
+    // A pending native share can still be reading the file.
+    if (!this.shareAttempt) this.removeInvitationFile()
   },
 
-  shareStorefront() {
-    const { storefrontImagePath, canShareImage, sharingImage } = this.data
-    if (!storefrontImagePath || !canShareImage || sharingImage) return
+  removeInvitationFile() {
+    const path = this.invitation?.invitationImagePath
+    this.invitation = null
+    if (!path) return
+    try {
+      wx.getFileSystemManager().unlinkSync(path)
+    } catch {}
+  },
 
-    this.setData({ sharingImage: true, imageNotice: '' })
-    const finish = imageNotice => this.setData({ sharingImage: false, imageNotice })
+  expireImage() {
+    if (isFresh(this.invitation?.createdAt)) return false
+    this.setData({
+      invitationImagePath: '', canShareImage: false,
+      shareNotice: '预订图已过期，请返回预订消息页重新生成。',
+    })
+    return true
+  },
+
+  onImageError() {
+    this.setData({
+      invitationImagePath: '', canShareImage: false,
+      shareNotice: '预订图无法打开，请返回预订消息页重新生成。',
+    })
+  },
+
+  shareInvitation() {
+    const { invitationImagePath, canShareImage, shareState } = this.data
+    if (this.unloaded || !canShareImage || this.shareAttempt || shareState === 'requested') return
+    if (this.expireImage()) return
+
+    const attempt = {}
+    this.shareAttempt = attempt
+    this.setData({ shareState: 'sharing', shareNotice: '' })
+    const finish = (shareState, shareNotice) => {
+      if (this.shareAttempt !== attempt) return
+      this.shareAttempt = null
+      if (this.unloaded) {
+        this.removeInvitationFile()
+      } else {
+        this.setData({ shareState, shareNotice })
+      }
+    }
     const fail = error => {
-      const cancelled = /cancel|取消/i.test(error?.errMsg || '')
-      finish(cancelled ? '已取消发送门头照片。' : '门头照片未能发起发送，请重试。')
+      const cancelled = /cancel|取消/i.test(error?.errMsg || error?.message || '')
+      finish('', cancelled
+        ? '已取消发送，可以重试。'
+        : '未能发起发送，可重试或返回预订消息页转发图片。')
     }
     try {
       wx.shareImageToGroup({
-        imagePath: storefrontImagePath,
+        imagePath: invitationImagePath,
         needShowEntrance: false,
-        success: () => finish('请在微信聊天中查看照片发送结果。'),
+        success: () => finish('requested', '请在微信聊天中查看发送结果。'),
         fail,
       })
     } catch (error) {
@@ -69,34 +119,7 @@ Page({
     }
   },
 
-  copyStoreName() {
-    const name = this.data.storeLocation?.name
-    if (!name) return
-
-    const fail = () => this.setData({ locationNotice: '店名复制失败，可长按店名手动复制。' })
-    try {
-      wx.setClipboardData({
-        data: name,
-        success: () => this.setData({ locationNotice: '已复制店名，可在微信位置页粘贴搜索。' }),
-        fail,
-      })
-    } catch {
-      fail()
-    }
-  },
-
-  openStoreLocation() {
-    const { storeLocation, canOpenLocation } = this.data
-    if (!canOpenLocation) return
-
-    this.setData({ locationNotice: '' })
-    wx.openLocation({
-      ...storeLocation,
-      fail: () => this.setData({ locationNotice: '地图暂时无法打开，可复制店名后在微信中搜索。' }),
-    })
-  },
-
   goBack() {
     wx.navigateBack({ fail: () => wx.exitMiniProgram() })
-  }
+  },
 })

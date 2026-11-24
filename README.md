@@ -35,9 +35,9 @@
 
 ### 分享预订和发送短信
 
-在已预订的订单详情点「发送微信」，核对正文后点「选择微信联系人」。选好好友或群聊，在同一聊天工具里分别点「发送文字」和「发送门头照片」。正文末尾附珊瑚海的腾讯地图地点链接。要发送独立的位置卡片，可点「复制店名」，回到微信聊天点「＋ → 位置 → 发送位置」，搜索店名并核对江学路381弄22号。聊天工具适用于微信 iOS / Android 8.0.56 及以上、基础库 3.7.8 及以上。较旧版本可复制正文、长按门头照片转发。[微信聊天工具模式](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/chatTool.html) · [原生图片发送接口](https://developers.weixin.qq.com/miniprogram/dev/api/chattool/wx.shareImageToGroup.html)
+在已预订的订单详情点「发送微信」，预览包含预订文字和珊瑚海门头照片的图片。如需改字，点「编辑文字」。点「选择微信联系人」，选好好友或群聊后，点一次「发送图文预订」。对方收到一张完整图片。较旧版本也可长按预订图，选择「发送给朋友」。[微信聊天工具模式](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/chatTool.html) · [原生图片发送接口](https://developers.weixin.qq.com/miniprogram/dev/api/chattool/wx.shareImageToGroup.html)
 
-正文列出用餐日期、星期、午宴或晚宴、餐位、人数、地址和订餐电话。「专职为您服务」一行使用接单时的员工姓名和该员工当前的服务手机号。管理员更正姓名后，新建预订会记录新姓名。服务手机号更新后，重新打开已有预订的消息也能看到新号码。
+预订图列出用餐日期、星期、午宴或晚宴、餐位、人数和订餐电话。短信原文另含门店地址。「专职为您服务」一行使用接单时的员工姓名和该员工当前的服务手机号。管理员更正姓名后，新建预订会记录新姓名。服务手机号更新后，重新打开已有预订的消息也能看到新号码。
 
 正式发布前，在微信公众平台「用户隐私保护指引」中声明剪切板用途，说明员工主动复制预订消息用于发送给客人。自动复制不可用时，员工仍可长按正文选择复制。[微信用户隐私保护指引](https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html)
 

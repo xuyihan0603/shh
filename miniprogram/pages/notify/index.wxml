@@ -30,26 +30,29 @@
       </block>
       <block wx:else>
         <view class="rec-panel notify-panel">
-          <view class="rec-title">消息正文</view>
-          <text class="notify-message" user-select>{{message}}</text>
-          <button wx:if="{{canOpenChat}}" class="rec-button rec-primary notify-action" loading="{{chatOpening}}" disabled="{{chatOpening}}" bindtap="openChat">选择微信联系人</button>
-          <view wx:if="{{canOpenChat && storeLocation}}" class="rec-muted notify-hint">选择一次联系人，即可在同一聊天中分别发送文字和门头照片。</view>
-          <button class="rec-button notify-action {{canOpenChat ? 'rec-secondary' : 'rec-primary'}}" bindtap="copy">复制预订消息</button>
-          <view wx:if="{{copyStatus === 'success'}}" class="notify-success">已复制，打开微信好友或群聊，长按输入框粘贴并发送。</view>
-          <view wx:elif="{{copyStatus === 'failed'}}" class="rec-alert notify-feedback">复制失败，可长按上方预订消息手动复制。</view>
-          <view wx:elif="{{chatNotice || !canOpenChat}}" class="rec-muted notify-hint">{{chatNotice || '当前微信无法打开聊天列表，可复制预订消息后粘贴发送。'}}</view>
-        </view>
-        <view wx:if="{{storeLocation}}" class="rec-panel notify-panel">
-          <view class="rec-title">门头照片和定位</view>
-          <image class="notify-storefront" src="/assets/storefront.jpg" mode="widthFix" show-menu-by-longpress="{{true}}" aria-label="珊瑚海门头照片" />
-          <view class="rec-muted notify-hint">也可长按照片，选择「发送给朋友」。</view>
-          <text class="notify-store-name" user-select>{{storeLocation.name}}</text>
-          <text class="rec-muted notify-address" user-select>{{storeLocation.address}}</text>
-          <view class="notify-map-actions">
-            <button class="rec-button rec-secondary" bindtap="openStoreLocation">查看门店地图</button>
-            <button class="rec-button rec-secondary" bindtap="copyStoreName">复制定位店名</button>
+          <view class="notify-heading">
+            <view class="rec-title">{{editingText ? '编辑预订文字' : '预订图文'}}</view>
+            <button wx:if="{{!editingText}}" class="notify-edit" disabled="{{generating || chatOpening}}" bindtap="editMessage">编辑文字</button>
           </view>
-          <view class="rec-muted notify-hint">正文已带地图链接。要单独发送位置卡片，在微信聊天中点「＋ → 位置 → 发送位置」，搜索店名并核对地址。</view>
+          <block wx:if="{{editingText}}">
+            <textarea class="notify-editor" aria-label="预订文字" value="{{editText}}" maxlength="{{-1}}" auto-height bindinput="changeText" />
+            <view class="notify-editor-actions">
+              <button class="rec-button rec-secondary" bindtap="finishEditing" data-cancel="{{true}}">取消</button>
+              <button class="rec-button rec-primary" disabled="{{!editText}}" bindtap="finishEditing">完成编辑</button>
+            </view>
+          </block>
+          <block wx:else>
+            <view wx:if="{{generating}}" class="rec-state">正在生成预订图…</view>
+            <block wx:elif="{{imageError}}">
+              <view class="rec-alert notify-feedback">{{imageError}}</view>
+              <button class="rec-button rec-secondary notify-action" bindtap="generateImage">重新生成</button>
+            </block>
+            <block wx:elif="{{invitationImagePath}}">
+              <button wx:if="{{canOpenChat || canShareImageMenu}}" class="rec-button rec-primary notify-action" loading="{{chatOpening}}" disabled="{{chatOpening}}" bindtap="openChat">{{canOpenChat ? '选择微信联系人' : '发送给朋友'}}</button>
+              <view wx:if="{{chatNotice || !(canOpenChat || canShareImageMenu)}}" class="rec-muted notify-hint">{{chatNotice || '长按下方预订图，选择「发送给朋友」。'}}</view>
+              <image class="notify-poster" src="{{invitationImagePath}}" mode="widthFix" show-menu-by-longpress="{{true}}" aria-label="{{message}}" />
+            </block>
+          </block>
         </view>
         <view wx:if="{{cloudEnabled || cloudStatus === 'accepted' || cloudStatus === 'pending' || cloudNote}}" class="rec-panel notify-panel">
           <view class="rec-title">门店短信服务</view>
@@ -65,4 +68,5 @@
       </block>
     </block>
   </view>
+  <canvas wx:if="{{!smsOnly}}" type="2d" id="invitation-image-canvas" class="notify-canvas" aria-hidden="{{true}}" />
 </view>

@@ -1,21 +1,15 @@
 const api = require('../../lib/api')
 const { invitationText, smsFields } = require('../../lib/invitation')
+const { createInvitationImage } = require('../../lib/invitation-image')
 
 const CHAT_DRAFT_KEY = 'shh.chatTool.draft'
 const STOREFRONT_ASSET = '/assets/storefront.jpg'
-const STORE_LOCATION = {
-  name: '珊瑚海·台州小海鲜(兰桥商业广场店)',
-  address: '上海市松江区方松街道江学路381弄22号',
-  latitude: 31.031818,
-  longitude: 121.211192,
-}
-const STORE_MAP_URL = 'https://map.wap.qq.com/online/h5-poi-detail-out/index.html?uid=7237907789162872389'
 const EMPTY_DETAILS = {
   loading: true, error: '', needsName: false, notice: '', copyStatus: '',
-  card: null, phone: '', message: '', canOpenChat: false, canCompose: false, opening: false,
+  card: null, phone: '', message: '', canOpenChat: false, canShareImageMenu: false, canCompose: false, opening: false,
   smsDiagnostic: '', smsHint: '',
   cloudEnabled: false, cloudStatus: '', cloudNote: '', cloudFields: '',
-  storeLocation: null,
+  invitationImagePath: '', generating: false, imageError: '', editingText: false, editText: '',
 }
 const SMS_REFRESH_ERRORS = ['VERSION_CONFLICT', 'NOTIFY_PENDING', 'GONE', 'UNAUTHORIZED', 'NAME_REQUIRED', 'FORBIDDEN']
 
@@ -57,23 +51,29 @@ function canOpenChat() {
     (typeof wx.canIUse !== 'function' || wx.canIUse('openChatTool'))
 }
 
-function discardChatDraft(token) {
+function discardChatDraft(token, localImagePath) {
   try {
     const draft = wx.getStorageSync(CHAT_DRAFT_KEY)
     if (draft && draft.token === token) wx.removeStorageSync(CHAT_DRAFT_KEY)
   } catch (_) {}
+  if (localImagePath) {
+    try { wx.getFileSystemManager().unlinkSync(localImagePath) } catch (_) {}
+  }
 }
 
-function prepareStorefrontImage() {
-  try {
-    // The independent chat tool can read a local user file shared by both packages.
-    const fs = wx.getFileSystemManager()
-    const path = wx.env.USER_DATA_PATH + '/shh-storefront.jpg'
-    fs.writeFileSync(path, fs.readFileSync(STOREFRONT_ASSET))
-    return path
-  } catch (_) {
-    return ''
+function copyImageForChat(tempImagePath, token, now) {
+  const fs = wx.getFileSystemManager()
+  const directory = wx.env.USER_DATA_PATH
+  // Remove expired handoffs left by an interrupted chat tool.
+  for (const name of fs.readdirSync(directory)) {
+    const match = /^shh-invite-([0-9a-z]+)-[0-9a-z]+\.jpg$/.exec(name)
+    if (match && now - parseInt(match[1], 36) >= 10 * 60 * 1000) {
+      try { fs.unlinkSync(directory + '/' + name) } catch (_) {}
+    }
   }
+  const path = directory + '/shh-invite-' + token + '.jpg'
+  fs.copyFileSync(tempImagePath, path)
+  return path
 }
 
 Page({
@@ -108,6 +108,7 @@ Page({
     this.smsSession = null
     this.smsAttempt = null
     this.clipboardRequest = null
+    this.revisedMessage = null
   },
 
   clearDetails() {
@@ -131,7 +132,7 @@ Page({
       if (this.requestId !== requestId) return
       const { card, sms } = details
       if (!card || (smsOnly && !sms)) throw new Error('预订消息资料不完整，请联系店长或管理员。')
-      const preview = { loading: false, card, message: invitationText(card) }
+      const preview = { loading: false, card, message: invitationText(smsOnly ? card : { ...card, address: '' }) }
       this.details = details
       if (smsOnly) {
         if (!this.smsSession || this.smsSession.id !== id || this.smsSession.version !== details.version) {
@@ -145,20 +146,21 @@ Page({
           smsDiagnostic: session.diagnostic, smsHint: session.hint, opening: Boolean(this.smsAttempt),
         })
       } else {
-        const pilot = card.store === '珊瑚海'
+        const revision = this.revisedMessage
+        const currentRevision = revision && revision.version === details.version && revision.original === preview.message
         this.setData({
-          ...preview, canOpenChat: canOpenChat(),
-          message: pilot ? preview.message + '\n\n门店定位：\n' + STORE_MAP_URL : preview.message,
-          storeLocation: pilot ? STORE_LOCATION : null,
+          ...preview, canOpenChat: canOpenChat(), canShareImageMenu: typeof wx.showShareImageMenu === 'function',
+          message: currentRevision ? revision.text : preview.message,
           phone: sms?.phone || '',
           cloudEnabled: !details.trial && Boolean(sms?.enabled) && sms.status !== 'accepted' && sms.status !== 'pending',
           cloudStatus: details.trial ? '' : sms?.status || '',
           cloudNote: details.trial ? '' : sms?.reason || '',
           cloudFields: smsFields(card).join(' · '),
-        })
+        }, () => { if (this.details === details) this.generateImage() })
       }
     } catch (error) {
       if (this.requestId === requestId) {
+        this.revisedMessage = null
         this.smsSession = null
         this.smsAttempt = null
         this.setData({
@@ -173,12 +175,76 @@ Page({
     wx.switchTab({ url: '/pages/account/index' })
   },
 
+  async generateImage() {
+    const { card, message, smsOnly, generating } = this.data
+    if (!card || smsOnly || generating || !message.trim()) return
+    const details = this.details
+    this.setData({ generating: true, invitationImagePath: '', imageError: '', chatNotice: '' })
+    // A new order or another visit to the page must not draw over an export in progress.
+    const render = (this.imageWork || Promise.resolve()).then(async () => {
+      if (this.details !== details) return
+      const canvas = await new Promise((resolve, reject) => {
+        this.createSelectorQuery().select('#invitation-image-canvas').fields({ node: true }).exec(result => {
+          if (result?.[0]?.node) resolve(result[0].node)
+          else reject(new Error('Canvas unavailable'))
+        })
+      })
+      return createInvitationImage(canvas, message, card.store === '珊瑚海' ? STOREFRONT_ASSET : null)
+    })
+    this.imageWork = render.catch(() => {})
+    try {
+      const invitationImagePath = await render
+      if (this.details === details) this.setData({ invitationImagePath, generating: false })
+    } catch (error) {
+      if (this.details === details) this.setData({
+        generating: false, imageError: error?.code === 'TEXT_TOO_LONG'
+          ? '文字过长，请点「编辑文字」缩短后重新生成。' : '预订图生成失败，请重新生成。',
+      })
+    }
+  },
+
+  editMessage() {
+    if (this.data.generating || this.data.chatOpening) return
+    this.setData({ editingText: true, editText: this.data.message, chatNotice: '' })
+  },
+
+  changeText(event) {
+    this.setData({ editText: event.detail.value })
+  },
+
+  finishEditing(event) {
+    if (event.currentTarget.dataset.cancel || this.data.editText === this.data.message) {
+      this.setData({ editingText: false })
+      return
+    }
+    if (!this.data.editText.trim()) {
+      wx.showToast({ title: '请输入预订文字', icon: 'none' })
+      return
+    }
+    this.revisedMessage = {
+      version: this.details.version, original: invitationText({ ...this.data.card, address: '' }), text: this.data.editText,
+    }
+    this.setData({ editingText: false, message: this.data.editText, invitationImagePath: '' }, () => this.generateImage())
+  },
+
   openChat() {
-    const { card, smsOnly, message, canOpenChat } = this.data
-    if (!card || smsOnly || !message || !canOpenChat || this.chatRequest) return
+    const { card, smsOnly, invitationImagePath, editingText, canOpenChat, canShareImageMenu } = this.data
+    if (!card || smsOnly || editingText || !invitationImagePath || this.chatRequest) return
+    if (!canOpenChat) {
+      if (canShareImageMenu) wx.showShareImageMenu({
+        path: invitationImagePath, needShowEntrance: false,
+        fail: error => {
+          if (!this.hidden && !this.unloaded && !/cancel|取消/i.test(error?.errMsg || '')) {
+            this.setData({ chatNotice: '请长按预订图，选择「发送给朋友」。' })
+          }
+        },
+      })
+      return
+    }
 
     const createdAt = Date.now()
     const token = createdAt.toString(36) + '-' + Math.random().toString(36).slice(2)
+    let localImagePath
     this.chatRequest = token
     this.setData({ chatOpening: true, chatNotice: '', copyStatus: '' })
 
@@ -188,20 +254,16 @@ Page({
       if (!this.unloaded) this.setData({ chatOpening: false, chatNotice })
     }
     const fail = error => {
-      discardChatDraft(token)
+      discardChatDraft(token, localImagePath)
       const cancelled = /cancel|取消/i.test((error && error.errMsg) || '')
       finish(cancelled
-        ? '已取消选择。可复制预订消息后粘贴发送。'
-        : '无法打开微信聊天列表，可复制预订消息后粘贴发送。')
+        ? '已取消选择联系人。'
+        : '无法打开联系人列表，可长按预订图发送给朋友。')
     }
 
     try {
-      const draft = { token, text: message, createdAt }
-      if (this.data.storeLocation) {
-        draft.storeLocation = this.data.storeLocation
-        draft.storefrontImagePath = prepareStorefrontImage()
-      }
-      wx.setStorageSync(CHAT_DRAFT_KEY, draft)
+      localImagePath = copyImageForChat(invitationImagePath, token, createdAt)
+      wx.setStorageSync(CHAT_DRAFT_KEY, { token, invitationImagePath: localImagePath, createdAt })
       wx.openChatTool({
         url: '/chat-tool/pages/send/index?token=' + token,
         success: () => finish(),
@@ -210,23 +272,6 @@ Page({
     } catch (error) {
       fail(error)
     }
-  },
-
-  copyStoreName() {
-    const { storeLocation } = this.data
-    if (!storeLocation) return
-    wx.setClipboardData({
-      data: storeLocation.name,
-      fail: () => wx.showToast({ title: '请长按店名复制', icon: 'none' }),
-    })
-  },
-
-  openStoreLocation() {
-    if (!this.data.storeLocation) return
-    wx.openLocation({
-      ...this.data.storeLocation,
-      fail: () => wx.showToast({ title: '可用正文里的地图链接查看', icon: 'none' }),
-    })
   },
 
   openSms(phone) {
@@ -258,7 +303,7 @@ Page({
 
   copy() {
     const { card, smsOnly, phone, message, canCompose, opening, sending } = this.data
-    if (!card || !message || this.clipboardRequest || opening || sending || this.hidden || this.unloaded) return
+    if (!smsOnly || !card || !message || this.clipboardRequest || opening || sending || this.hidden || this.unloaded) return
 
     const clipboardRequest = {}
     this.clipboardRequest = clipboardRequest
