@@ -109,12 +109,23 @@ test('店长散客只填桌位和人数即可到店，在日报中单列', () =>
   assert.throws(() => execute(state, 'sales1', 'save', { kind: 'walkin', tableIds: ['102'], guests: 4 }), { code: 'FORBIDDEN' })
 
   const settled = execute(state, 'front', 'settle', { id: walkin.id, version: walkin.version, amount: '0.00' })
-  assert.equal(tableOnBoard(state, date, walkin.meal, '101').orderId, settled.id)
+  const board = execute(state, 'sales1', 'board', { date, meal: walkin.meal })
+  assert.equal(board.guestCount, 4)
+  assert.equal(board.tables.find(table => table.id === '101').orderId, null)
+
+  const next = execute(state, 'sales1', 'save', booking(date, {
+    meal: walkin.meal, time: walkin.time, tableIds: ['101'],
+  }))
+  assert.equal(tableOnBoard(state, date, walkin.meal, '101').orderId, next.id)
+
   const report = execute(state, 'finance', 'report', { date })
   assert.deepEqual(report.rows.find(row => row.staffId === 'walkin'), {
     staffId: 'walkin', name: '散客', orderCount: 1, tableCount: 1, amount: 0, pending: 0, deposit: 0,
   })
   assert.equal(report.rows.find(row => row.staffId === 'front').orderCount, 0)
+  const history = report.details.find(order => order.id === settled.id)
+  assert.equal(history.status, 'settled')
+  assert.deepEqual(history.tableIds, ['101'])
 })
 
 test('日报按用餐日和原接单人统计，已抵扣订金单列且不重复计入消费', () => {

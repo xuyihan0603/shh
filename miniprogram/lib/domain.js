@@ -318,6 +318,10 @@ function compareServiceTime(first, second) {
   return first.date.localeCompare(second.date) || first.time.localeCompare(second.time)
 }
 
+function occupiesTables(order) {
+  return order.status === 'booked' || order.status === 'arrived'
+}
+
 function forBoard(state, data) {
   const date = readDate(data.date === undefined ? today() : data.date)
   const meal = readMeal(data.meal)
@@ -326,6 +330,7 @@ function forBoard(state, data) {
   for (const order of state.orders) {
     if (order.date !== date || order.meal !== meal || order.status === 'cancelled') continue
     guestCount += order.guests
+    if (!occupiesTables(order)) continue
     const occupancy = { orderId: order.id, orderStatus: order.status }
     if (order.status === 'booked') {
       const originalName = typeof order.ownerName === 'string' ? order.ownerName.trim() : ''
@@ -547,7 +552,7 @@ function resolveTables(state, tableIds) {
 function checkTables(state, current, date, meal, tables, other = null) {
   const occupied = new Set()
   for (const order of state.orders) {
-    if (order === current || order === other || order.date !== date || order.meal !== meal || order.status === 'cancelled') continue
+    if (order === current || order === other || order.date !== date || order.meal !== meal || !occupiesTables(order)) continue
     for (const id of order.tableIds) occupied.add(id)
   }
   const conflicts = tables.filter(table => occupied.has(table.id))

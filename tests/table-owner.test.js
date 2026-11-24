@@ -25,7 +25,7 @@ function readTable(state, id, filters = {}) {
 test('已预订桌位显示原接单员工，按日期与餐段跟随多桌、换桌和订单状态', () => {
   const state = setup()
   const original = execute(state, 'sales1', 'save', booking)
-  const lunch = execute(state, 'sales2', 'save', { ...booking, meal: 'lunch', time: '12:00', tableIds: ['101'] })
+  const lunch = execute(state, 'sales2', 'save', { ...booking, meal: 'lunch', time: '12:00' })
   execute(state, 'sales2', 'save', { ...booking, date: nextDate, tableIds: ['101'] })
 
   assert.deepEqual(readTable(state, '101'), {
@@ -48,9 +48,11 @@ test('已预订桌位显示原接单员工，按日期与餐段跟随多桌、�
     ...state.tables[0], orderId: arrived.id, orderStatus: 'arrived',
   })
   execute(state, 'front', 'settle', { id: arrived.id, version: arrived.version, amount: 200 })
-  assert.deepEqual(readTable(state, '101', { meal: 'lunch' }), {
-    ...state.tables[0], orderId: arrived.id, orderStatus: 'settled',
-  })
+  for (const table of state.tables.slice(0, 2)) {
+    assert.deepEqual(readTable(state, table.id, { meal: 'lunch' }), {
+      ...table, orderId: null, orderStatus: null,
+    })
+  }
 })
 
 test('旧预订缺少接单姓名时，通过原员工账号查找姓名', () => {
