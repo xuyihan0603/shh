@@ -4,6 +4,7 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 const { once } = require('node:events')
+const { today } = require('../miniprogram/lib/domain')
 const { openStore } = require('../server/database')
 const { createServer } = require('../server')
 
@@ -70,12 +71,45 @@ test('服务手机号的绑定、旧客户端兼容、角色权限与共享持�
   assert.equal(second.run('manager', 'bootstrap').me.servicePhone, managerPhone)
   assert.equal(second.run(employee.id, 'bootstrap').me.servicePhone, sellerPhone)
   assert.equal((await call(seller, 'bootstrap')).staff.some(person => 'servicePhone' in person), false)
+  assert.equal((await call(manager, 'staffRoles')).find(person => person.id === employee.id).servicePhone, sellerPhone)
   assert.equal((await call(seller, 'staffList', {}, 403)).code, 'FORBIDDEN')
   assert.equal((await call(seller, 'staffSave', { ...employee, servicePhone: managerPhone }, 403)).code, 'FORBIDDEN')
   await call(seller, 'setServicePhone', {}, 400)
   assert.equal(second.run(employee.id, 'bootstrap').me.servicePhone, sellerPhone)
 
   const replacementPhone = '16600112233'
+  const booking = {
+    date: today(), meal: 'dinner', time: '18:30', tableIds: ['205'], guests: 8,
+    contact: '测试客人', phone: '13800000109',
+  }
+  const oldOrder = await call(seller, 'save', booking)
+  const change = {
+    id: employee.id, name: ' 赵小妍 ', servicePhone: `+86 ${replacementPhone}`,
+    expectedName: employee.name, expectedServicePhone: sellerPhone,
+  }
+  assert.equal((await call('', 'setStaffProfile', change, 401)).code, 'UNAUTHORIZED')
+  assert.equal((await call(seller, 'setStaffProfile', change, 403)).code, 'FORBIDDEN')
+  assert.equal((await call(manager, 'setStaffProfile', { ...change, servicePhone: '010-55550100' }, 400)).code, 'VALIDATION')
+  assert.equal(second.run(employee.id, 'bootstrap').me.name, employee.name)
+  await call(seller, 'setServicePhone', { servicePhone: '' })
+  assert.equal((await call(manager, 'setStaffProfile', change, 409)).code, 'VERSION_CONFLICT')
+  const edited = await call(manager, 'setStaffProfile', {
+    ...change, expectedServicePhone: '', role: 'admin', active: false, password: 'not-applied',
+  })
+  assert.deepEqual(edited, { ...employee, name: '赵小妍', servicePhone: replacementPhone, nameBound: true, active: true })
+  assert.equal(second.run(employee.id, 'bootstrap').me.name, edited.name)
+  assert.equal((await call(seller, 'bootstrap')).me.servicePhone, replacementPhone)
+  const original = await call(seller, 'notificationDetails', { id: oldOrder.id })
+  assert.equal(original.card.serviceName, oldOrder.ownerName)
+  assert.equal(original.card.servicePhone, replacementPhone)
+  const newOrder = await call(seller, 'save', { ...booking, tableIds: ['206'] })
+  assert.equal(newOrder.ownerName, edited.name)
+  assert.equal(newOrder.ownerId, oldOrder.ownerId)
+  await call(manager, 'setStaffProfile', {
+    ...change, name: employee.name, servicePhone: '', expectedName: edited.name, expectedServicePhone: replacementPhone,
+  })
+  assert.equal(second.run(employee.id, 'bootstrap').me.servicePhone, undefined)
+
   await call(manager, 'staffSave', { ...employee, name: '错误修改', servicePhone: 16600112233 }, 400)
   assert.equal(second.run(employee.id, 'bootstrap').me.name, employee.name)
   await call(manager, 'staffSave', { ...employee, servicePhone: replacementPhone })

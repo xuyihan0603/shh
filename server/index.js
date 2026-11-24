@@ -8,7 +8,7 @@ const {notificationDetails,prepareInvite,readInvite,sendSms} = require('./notifi
 
 const assets = path.join(__dirname,'public')
 const types = {'.html':'text/html; charset=utf-8','.js':'application/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.ico':'image/x-icon'}
-const actions = new Set(['bootstrap','bindStaffName','setServicePhone','board','orders','storeOrders','order','save','cancel','arrive','settle','customer','customerLookup','customerInsights','report','configure','import','staffSave','staffList','staffRoles','setStaffRole'])
+const actions = new Set(['bootstrap','bindStaffName','setServicePhone','board','orders','storeOrders','order','save','cancel','arrive','settle','customer','customerLookup','customerInsights','report','configure','import','staffSave','staffList','staffRoles','setStaffRole','setStaffProfile'])
 const codes = {UNAUTHORIZED:401,AUTH_FAILED:401,FORBIDDEN:403,NAME_REQUIRED:403,ACCESS_PENDING:403,NOT_FOUND:404,GONE:410,TABLE_CONFLICT:409,VERSION_CONFLICT:409,NOTIFY_PENDING:409,ADMIN_BOUND:409,RATE_LIMIT:429,SMS_UNCONFIGURED:503,SMS_FAILED:502,VALIDATION:400}
 const disabledSmsEnv = Object.freeze(Object.create(null))
 

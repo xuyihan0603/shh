@@ -247,3 +247,59 @@ test('管理员可分配营销和店长职位，员工刷新后进入工作台�
   await assert.rejects(staffClient.api.call('order', { id: 'order-1' }), { code: 'ACCESS_PENDING' })
   assert.deepEqual(staffClient.navigation, ['/pages/index/index', '/pages/access/index'])
 })
+
+test('管理员更新员工资料时显示校验结果，并在资料冲突后刷新员工列表', async () => {
+  const admin = { id: 'manager', name: '张明', nameBound: true, role: 'admin' }
+  let staff = { id: 'wx_0123456789abcdef', name: '陈青', nameBound: true, role: 'sales', servicePhone: '13800001234' }
+  const client = cloudClient('trial', request => {
+    switch (request.path) {
+      case '/health': return ok(healthy)
+      case '/auth/wechat': return ok({ token: 'admin-token', me: admin })
+      case '/api/bootstrap': return ok({ me: admin })
+      case '/api/staffRoles': return ok([admin, staff])
+      case '/api/setStaffProfile': {
+        assert.equal(token(request), 'Bearer admin-token')
+        const { id, name, servicePhone, expectedName, expectedServicePhone } = request.data
+        assert.equal(id, staff.id)
+        assert.equal(request.data.role, undefined)
+        if (expectedName !== staff.name || expectedServicePhone !== (staff.servicePhone || '')) {
+          return failure(409, 'VERSION_CONFLICT', '员工资料已更新，请核对后重新编辑。')
+        }
+        if (servicePhone && !/^1\d{10}$/.test(servicePhone)) return failure(400, 'VALIDATION', '服务手机号格式不正确')
+        staff = { ...staff, name, servicePhone: servicePhone || undefined }
+        return ok(staff)
+      }
+      default: assert.fail('意外请求 ' + request.path)
+    }
+  })
+  const roster = pageFor('staff', client)
+  await roster.onShow()
+  const target = { currentTarget: { dataset: { id: staff.id } } }
+  const input = (field, value) => roster.editProfileField({
+    currentTarget: { dataset: { id: staff.id, field } }, detail: { value },
+  })
+  const member = () => roster.data.staff.find(person => person.id === staff.id)
+  roster.editProfile(target)
+  assert.equal(roster.data.editPhone, '13800001234')
+  input('editName', ' 陈青云 ')
+  input('editPhone', '123')
+  await roster.saveProfile(target)
+  assert.match(roster.data.editError, /手机号格式/)
+  assert.equal(roster.data.editName, ' 陈青云 ')
+  assert.equal(member().name, '陈青')
+
+  input('editPhone', '')
+  await roster.saveProfile(target)
+  assert.equal(roster.data.editId, '')
+  assert.equal(member().name, '陈青云')
+  assert.equal(member().servicePhone, undefined)
+  assert.equal(member().role, 'sales')
+
+  roster.editProfile(target)
+  input('editPhone', '13900005678')
+  staff = { ...staff, servicePhone: '13900009876' }
+  await roster.saveProfile(target)
+  assert.equal(roster.data.editId, '')
+  assert.match(roster.data.notice, /资料已更新/)
+  assert.equal(member().servicePhone, '13900009876')
+})

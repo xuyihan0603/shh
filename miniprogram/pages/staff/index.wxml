@@ -13,14 +13,18 @@
         <view class="staff-person">
           <view class="staff-name">{{item.name || '姓名待填写'}}</view>
           <view wx:if="{{!item.self}}" class="store-caption staff-meta">登记编号 {{item.code}}</view>
+          <view class="store-caption staff-meta">服务手机号 {{item.servicePhone || '未填写'}}</view>
           <text wx:if="{{item.self || item.active === false}}" class="staff-marker {{item.self ? 'staff-self' : ''}}">{{item.self ? '本人' : '已停用'}}</text>
         </view>
         <view class="staff-position">
           <text class="staff-role {{item.role === 'admin' || item.role === 'pending' ? 'staff-role-manager' : ''}}">{{item.roleLabel}}</text>
-          <button wx:if="{{!item.self && editId !== item.id}}" class="store-link staff-edit" data-id="{{item.id}}" bindtap="editRole" disabled="{{saving}}">{{item.role === 'pending' ? '分配职位' : '调整职位'}} <text class="staff-next" aria-hidden="true">›</text></button>
         </view>
       </view>
-      <view wx:if="{{editId === item.id}}" class="staff-editor">
+      <view wx:if="{{editId !== item.id}}" class="staff-links">
+        <button class="store-link staff-edit" data-id="{{item.id}}" bindtap="editProfile" disabled="{{saving}}">编辑资料</button>
+        <button wx:if="{{!item.self}}" class="store-link staff-edit" data-id="{{item.id}}" bindtap="editRole" disabled="{{saving}}">{{item.role === 'pending' ? '分配职位' : '调整职位'}}</button>
+      </view>
+      <view wx:elif="{{editMode === 'role'}}" class="staff-editor">
         <view class="store-field-label">新职位</view>
         <picker mode="selector" range="{{roleOptions}}" range-key="label" value="{{roleIndex < 0 ? 0 : roleIndex}}" data-id="{{item.id}}" disabled="{{saving}}" bindchange="chooseRole">
           <view class="store-input staff-picker"><text>{{roleIndex < 0 ? '请选择职位' : roleOptions[roleIndex].label}}</text><text class="store-chevron" aria-hidden="true">⌄</text></view>
@@ -28,6 +32,21 @@
         <view class="staff-actions">
           <button class="store-button store-button-quiet" disabled="{{saving}}" bindtap="cancelEdit">取消</button>
           <button class="store-button store-button-primary staff-save" data-id="{{item.id}}" bindtap="saveRole" loading="{{saving}}" disabled="{{saving || roleIndex < 0 || roleIndex === item.roleIndex}}">保存职位</button>
+        </view>
+      </view>
+      <view wx:else class="staff-editor">
+        <view class="staff-field">
+          <text class="store-field-label">员工姓名</text>
+          <input class="store-input" aria-label="员工姓名" value="{{editName}}" placeholder="请输入员工姓名" maxlength="40" data-id="{{item.id}}" data-field="editName" bindinput="editProfileField" disabled="{{saving}}" />
+        </view>
+        <view class="staff-field">
+          <text class="store-field-label">服务手机号</text>
+          <input class="store-input" aria-label="服务手机号" value="{{editPhone}}" placeholder="留空表示未设置" maxlength="24" data-id="{{item.id}}" data-field="editPhone" bindinput="editProfileField" disabled="{{saving}}" />
+        </view>
+        <view wx:if="{{editError}}" class="store-error staff-profile-error" role="alert">{{editError}}</view>
+        <view class="staff-actions">
+          <button class="store-button store-button-quiet" disabled="{{saving}}" bindtap="cancelEdit">取消</button>
+          <button class="store-button store-button-primary staff-save" data-id="{{item.id}}" bindtap="saveProfile" loading="{{saving}}" disabled="{{saving || !editName || (item.nameBound && editName === item.name && editPhone === (item.servicePhone || ''))}}">保存资料</button>
         </view>
       </view>
     </view>

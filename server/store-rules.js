@@ -3,7 +3,7 @@ const { seed, execute, requireAdmin, isStaffId, ADMIN_ID, ROLES, readServicePhon
 const { applyPilotMessageDefaults, applyPilotTableLayout } = require('../miniprogram/lib/pilot')
 
 const WECHAT_TEST_MODE = 'wechat-test'
-const writes = new Set(['save','cancel','arrive','settle','configure','import','staffSave','bindStaffName','setServicePhone','setStaffRole'])
+const writes = new Set(['save','cancel','arrive','settle','configure','import','staffSave','bindStaffName','setServicePhone','setStaffRole','setStaffProfile'])
 
 function fault(code, message) {
   return Object.assign(new Error(message), { code })

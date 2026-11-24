@@ -5,28 +5,14 @@
   margin-bottom: 18rpx;
 }
 
-.notify-recipient {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
-  margin-top: 14rpx;
-}
-
 .notify-phone {
-  min-width: 0;
+  display: block;
+  margin-top: 14rpx;
   color: #103947;
   font-size: 36rpx;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
   word-break: break-word;
-}
-
-.notify-copy {
-  flex-shrink: 0;
-  min-height: 66rpx;
-  padding: 0 16rpx;
-  font-size: 25rpx;
 }
 
 .notify-message {

@@ -67,7 +67,7 @@ test('待分配账号可登记姓名，获批前只看自己的资料且不能�
   assert.deepEqual(registration.staff, [])
   call(employee.id, 'bindStaffName', { name: '林小青' })
   assert.equal(call(employee.id, 'bootstrap').me.name, '林小青')
-  for (const action of ['board', 'orders', 'report', 'staffRoles', 'staffList', 'setStaffRole', 'notificationContext']) {
+  for (const action of ['board', 'orders', 'report', 'staffRoles', 'staffList', 'setStaffRole', 'setStaffProfile', 'notificationContext']) {
     assert.throws(() => call(employee.id, action), { code: 'ACCESS_PENDING' })
   }
 
@@ -76,6 +76,10 @@ test('待分配账号可登记姓名，获批前只看自己的资料且不能�
   assert.equal(call('manager', 'bootstrap').staff.some(person => person.id === employee.id), false)
   const listed = call('manager', 'staffRoles').find(person => person.id === employee.id)
   assert.equal(listed.role, 'pending')
+  const edit = { id: listed.id, expectedName: listed.name, expectedServicePhone: '', name: '林小青梅', servicePhone: '13900112233' }
+  const edited = call('manager', 'setStaffProfile', edit)
+  assert.deepEqual(edited, { ...listed, name: edit.name, servicePhone: edit.servicePhone })
+  assert.deepEqual(call(employee.id, 'bootstrap').me, edited)
   const assignment = { id: employee.id, expectedRole: listed.role }
   assert.throws(() => call('manager', 'setStaffRole', { ...assignment, role: 'admin' }), { code: 'VALIDATION' })
   assert.equal(call('manager', 'setStaffRole', { ...assignment, role: 'finance' }).role, 'finance')
@@ -84,6 +88,7 @@ test('待分配账号可登记姓名，获批前只看自己的资料且不能�
   assert.throws(() => call(employee.id, 'staffRoles'), { code: 'FORBIDDEN' })
   assert.equal(call('manager', 'setStaffRole', { id: employee.id, expectedRole: 'finance', role: 'manager' }).role, 'manager')
   assert.equal(call(employee.id, 'bootstrap').me.role, 'manager')
+  assert.throws(() => call(employee.id, 'setStaffProfile', edit), { code: 'FORBIDDEN' })
   assert.throws(() => call(employee.id, 'setStaffRole', { id: employee.id, role: 'admin', expectedRole: 'manager' }), { code: 'FORBIDDEN' })
   assert.equal(call('manager', 'setStaffRole', { id: employee.id, expectedRole: 'manager', role: 'pending' }).role, 'pending')
   assert.throws(() => call(employee.id, 'report'), { code: 'ACCESS_PENDING' })

@@ -33,15 +33,8 @@
 .staff-role-manager { background: var(--store-gold-light); color: var(--store-gold); }
 .staff-position { flex-shrink: 0; text-align: right; }
 
-.staff-edit {
-  justify-content: flex-end;
-  gap: 5rpx;
-  min-height: 62rpx;
-  margin: 2rpx 0 -7rpx auto;
-  font-size: 25rpx;
-}
-
-.staff-next { color: var(--store-muted); font-size: 32rpx; line-height: 1; }
+.staff-links { display: flex; justify-content: flex-end; gap: 24rpx; margin: 5rpx 0 -7rpx; }
+.staff-edit { min-height: 74rpx; padding: 8rpx 4rpx; }
 
 .staff-editor {
   padding: 17rpx;
@@ -57,6 +50,8 @@
   gap: 10rpx;
   background: #fff;
 }
+
+.staff-field + .staff-field, .staff-profile-error { margin-top: 16rpx; }
 
 .staff-actions { display: flex; gap: 14rpx; margin-top: 15rpx; }
 .staff-actions .store-button { flex: 1; }

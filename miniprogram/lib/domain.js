@@ -183,13 +183,13 @@ function isStaffId(id) {
     !['walkin', '__proto__', 'constructor', 'prototype'].includes(id)
 }
 
-function staffRoleProfile(person) {
-  return { ...profile(person), active: person.active !== false }
+function staffDetails(person) {
+  return { ...accountProfile(person), active: person.active !== false }
 }
 
 function manageStaffRoles(state, actor, action, data) {
   requireAdmin(actor)
-  if (action === 'staffRoles') return state.staff.map(staffRoleProfile)
+  if (action === 'staffRoles') return state.staff.map(staffDetails)
 
   const { id, role, expectedRole } = data
   const choices = state.environment === 'wechat-test' ? WECHAT_STAFF_ROLES : STAFF_ROLES
@@ -202,7 +202,24 @@ function manageStaffRoles(state, actor, action, data) {
   if (person.role !== expectedRole) fail('VERSION_CONFLICT', '员工职位已变更，请刷新后重试')
 
   person.role = role
-  return staffRoleProfile(person)
+  return staffDetails(person)
+}
+
+function setStaffProfile(state, actor, data) {
+  requireAdmin(actor)
+  const { id, expectedName, expectedServicePhone } = data
+  if (!isStaffId(id) || typeof expectedName !== 'string' || typeof expectedServicePhone !== 'string') {
+    fail('VALIDATION', '员工资料有误')
+  }
+  const person = state.staff.find(staff => staff.id === id)
+  if (!person) fail('NOT_FOUND', '未找到该员工账号')
+  if ((person.name ?? '') !== expectedName || normalizeServicePhone(person.servicePhone) !== expectedServicePhone) {
+    fail('VERSION_CONFLICT', '员工资料已变更，请刷新后重试')
+  }
+  const name = readStaffName(data.name)
+  const servicePhone = readServicePhone(data.servicePhone)
+  Object.assign(person, { name, servicePhone, nameBound: true })
+  return staffDetails(person)
 }
 
 function isStaffRoleName(name) {
@@ -216,10 +233,15 @@ function suggestStaffName(actor) {
   return name
 }
 
-function bindStaffName(actor, data) {
-  const name = readText(data.name, '员工姓名', true)
+function readStaffName(value) {
+  const name = readText(value, '员工姓名', true)
   if (name.length > 40 || /[\x00-\x1F\x7F-\x9F]/.test(name)) fail('VALIDATION', '员工姓名格式不正确')
   if (isStaffRoleName(name)) fail('VALIDATION', '请填写本人姓名')
+  return name
+}
+
+function bindStaffName(actor, data) {
+  const name = readStaffName(data.name)
   if (actor.nameBound === true && actor.name !== name) fail('FORBIDDEN', '姓名已绑定，请联系管理员修改')
   if (data.servicePhone !== undefined) {
     actor.servicePhone = readServicePhone(data.servicePhone, actor.nameBound !== true && actor.role !== 'finance')
@@ -709,6 +731,7 @@ function execute(state, actorId, action, data = {}, instant = new Date()) {
   }
   if (pending && action !== 'setServicePhone') fail('ACCESS_PENDING', '请等待管理员分配员工职位')
   if (action === 'staffRoles' || action === 'setStaffRole') return manageStaffRoles(state, actor, action, data)
+  if (action === 'setStaffProfile') return setStaffProfile(state, actor, data)
   requireStaffName(actor)
   switch (action) {
     case 'setServicePhone':

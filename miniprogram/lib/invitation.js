@@ -1,9 +1,6 @@
 const { PILOT_STORE, withPilotRoomDefaults } = require('./pilot')
 const { normalizeServicePhone } = require('./domain')
 
-// Keep a small prefill budget because WeChat clients can reject longer bodies.
-const COMPACT_SMS_MAX_BYTES = 64
-
 function describeTables(storeName, tableNames, tableIds = [], tables = []) {
   const groups = new Map()
   tableNames.forEach((name, index) => {
@@ -76,69 +73,8 @@ function invitationText(card) {
   ].join('\n')
 }
 
-function utf8Bytes(text) {
-  let bytes = 0
-  for (const char of text) {
-    const code = char.codePointAt(0)
-    if (code < 0x80) bytes += 1
-    else if (code < 0x800) bytes += 2
-    else if (code < 0x10000) bytes += 3
-    else bytes += 4
-  }
-  return bytes
-}
-
-function shorten(text, budget) {
-  if (utf8Bytes(text) <= budget) return text
-  let result = ''
-  let remaining = budget - utf8Bytes('…')
-  for (const char of text) {
-    remaining -= utf8Bytes(char)
-    if (remaining < 0) break
-    result += char
-  }
-  return result.trimEnd() + '…'
-}
-
-function compactSms(card) {
-  const store = singleLine(card.store)
-  const table = singleLine(card.tableLabel || card.tableNames.join('、')) || '餐位待定'
-  const date = card.date.slice(5, 10).replace('-', '/')
-  const time = card.time || (card.meal === 'lunch' ? '午餐' : '晚餐')
-  const schedule = `${date} ${time}`
-  const booking = `预订 ${schedule}`
-  const guests = `${card.guests}位`
-  const hasServiceContact = Boolean(card.serviceName && card.servicePhone)
-  if (hasServiceContact) {
-    const details = `${schedule} ${table} ${guests} ${card.serviceName} ${card.servicePhone}`
-    for (const message of [`${store}预订 ${details}`, `${store} ${details}`]) {
-      if (utf8Bytes(message) <= COMPACT_SMS_MAX_BYTES) return { message, note: '' }
-    }
-  }
-
-  const labelBudget = COMPACT_SMS_MAX_BYTES - utf8Bytes(`${booking}  ${guests}`)
-  const tableBudget = Math.max(Math.floor(labelBudget / 2), labelBudget - utf8Bytes(store))
-  const notes = []
-  let tableLabel = table
-  if (utf8Bytes(table) > tableBudget) {
-    if (card.tableNames.length > 1) {
-      tableLabel = `共${card.tableNames.length}桌`
-      notes.push('餐位以桌数显示。')
-    } else {
-      tableLabel = shorten(table, tableBudget)
-      notes.push('餐位名称已缩写。')
-    }
-  }
-  const storeLabel = shorten(store, labelBudget - utf8Bytes(tableLabel))
-  if (storeLabel !== store) notes.push('门店名称已缩写。')
-  if (hasServiceContact) notes.push('精简短信未含服务联系方式，完整正文中可查看。')
-
-  const message = `${storeLabel}${booking} ${tableLabel} ${guests}`
-  return { message: utf8Bytes(message) <= COMPACT_SMS_MAX_BYTES ? message : '', note: notes.join('') }
-}
-
 function smsFields(card) {
   return [card.store, card.date, card.meal === 'lunch' ? '午餐' : '晚餐', card.time || '待定', card.tableNames.join('、')]
 }
 
-module.exports = { publicInvitation, invitationText, compactSms, smsFields, serviceContactLine }
+module.exports = { publicInvitation, invitationText, smsFields, serviceContactLine }

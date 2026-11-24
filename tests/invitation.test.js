@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { publicInvitation, invitationText, compactSms, smsFields } = require('../miniprogram/lib/invitation')
+const { publicInvitation, invitationText, smsFields } = require('../miniprogram/lib/invitation')
 const { pilotLayout, applyPilotMessageDefaults } = require('../miniprogram/lib/pilot')
 
 test('珊瑚海邀请正文使用接单员工服务信息，且保持云短信参数兼容', () => {
@@ -71,39 +71,6 @@ test('午宴正文显示全部桌位，同层只标一次楼层，并沿用当�
   assert.match(body, /用餐時間:1月4日\(周日\)午宴\n餐位:二楼201包房、202，205、阳光房B1，一楼103\n人数14位！/)
   assert.match(body, /感謝您預订《测试门店》用餐/)
   assert.match(body, /本店地址:海城路 8 号\n订餐电话：010-55550100\n测试门店全体员工期待您的光临!$/)
-})
-
-test('精简短信在字节上限内保留完整姓名和服务手机号', () => {
-  const { store, tables } = pilotLayout()
-  const order = {
-    date: '2026-11-23', meal: 'dinner', time: '18:30', tableIds: ['205'], guests: 8,
-    ownerName: '徐志明', ownerServicePhone: '13800000002',
-  }
-  const { message, note } = compactSms(publicInvitation(store, order, tables))
-
-  assert.equal(message, '珊瑚海 11/23 18:30 二楼205包房 8位 徐志明 13800000002')
-  assert.ok(Buffer.byteLength(message, 'utf8') <= 64)
-  assert.equal(note, '')
-})
-
-test('精简短信放不下完整服务联系方式时保留预订信息，并提示查看完整正文', () => {
-  const store = { name: '海洋🦞宴会中心'.repeat(6) }
-  const order = {
-    date: '2026-11-23', meal: 'lunch', guests: 30,
-    tableNames: ['东厅临海第一包间', '白鹭湾第二宴会厅', '翡翠厅206'],
-    ownerName: '徐志明', ownerServicePhone: '13800000002',
-  }
-  const card = publicInvitation(store, order)
-  const { message, note } = compactSms(card)
-
-  assert.ok(Buffer.byteLength(message, 'utf8') <= 64)
-  assert.match(message, /^海洋🦞.*…预订 11\/23 午餐 共3桌 30位$/)
-  assert.doesNotMatch(message, /[\uD800-\uDFFF]/u)
-  assert.match(note, /餐位以桌数显示/)
-  assert.match(note, /门店名称已缩写/)
-  assert.match(note, /精简短信未含服务联系方式，完整正文中可查看/)
-  assert.match(invitationText(card), /徐志明专职为您服务：13800000002/)
-  for (const name of order.tableNames) assert.ok(invitationText(card).includes(name))
 })
 
 test('旧珊瑚海配置补齐已知门店资料和 205 包房，并保留后续自定义设置', () => {

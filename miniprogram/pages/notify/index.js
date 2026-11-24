@@ -1,32 +1,30 @@
 const api = require('../../lib/api')
-const { invitationText, compactSms, smsFields } = require('../../lib/invitation')
+const { invitationText, smsFields } = require('../../lib/invitation')
 
 const CHAT_DRAFT_KEY = 'shh.chatTool.draft'
 const EMPTY_DETAILS = {
   loading: true, error: '', needsName: false, notice: '', copyStatus: '',
-  card: null, phone: '', message: '', canOpenChat: false, canCompose: false, opening: '',
-  smsMode: 'manual', smsDiagnostic: '', smsHint: '', smsCopied: '', shortSms: null,
+  card: null, phone: '', message: '', canOpenChat: false, canCompose: false, opening: false,
+  smsDiagnostic: '', smsHint: '',
   cloudEnabled: false, cloudStatus: '', cloudNote: '', cloudFields: '',
 }
 const SMS_REFRESH_ERRORS = ['VERSION_CONFLICT', 'NOTIFY_PENDING', 'GONE', 'UNAUTHORIZED', 'NAME_REQUIRED', 'FORBIDDEN']
 
-function defaultSmsMode() {
+function canOpenSms() {
   if (typeof wx.sendSms !== 'function' ||
-      (typeof wx.canIUse === 'function' && !wx.canIUse('sendSms'))) return 'manual'
+      (typeof wx.canIUse === 'function' && !wx.canIUse('sendSms'))) return false
 
   try {
     const { platform } = wx.getDeviceInfo ? wx.getDeviceInfo() : wx.getSystemInfoSync()
-    if (platform === 'devtools') return 'manual'
-    // Avoid WeChat's SMS body length limit on Android.
-    if (platform && platform !== 'android') return 'full'
+    return platform !== 'devtools'
   } catch (_) {}
-  return 'number'
+  return true
 }
 
 function smsFailure(error) {
   const reason = String((error && (error.errMsg || error.message)) || '')
   const code = error && (error.errCode ?? error.errno ?? error.code)
-  // A platform error can echo the phone number or body. Only display technical text.
+  // Keep any recipient number out of the displayed diagnostics.
   const detail = reason.replace(/^sendSms:\s*/i, '').split(/[\r\n]/)[0]
   const bodyTooLong = /内容超出正文上限|(?:content|body).{0,30}(?:too long|exceeds?.{0,20}(?:length|limit))/i.test(detail)
   const safeDetail = bodyTooLong ? '内容超出正文上限' : /^[A-Za-z :_.-]{1,100}$/.test(detail) ? detail : ''
@@ -34,15 +32,15 @@ function smsFailure(error) {
   const diagnostic = [safeDetail, safeCode].filter(Boolean).join(' · ') || '微信未提供详细原因'
   if (/cancel|用户取消/i.test(reason)) return { cancelled: true }
   if (/activitynotfound|no activity|no (?:default )?sms app|no application/i.test(reason)) {
-    return { manual: true, diagnostic, hint: '手机找不到短信应用。请在系统设置中选择默认短信应用，再重试。' }
+    return { diagnostic, hint: '手机找不到短信应用。请在系统设置中选择默认短信应用，再重试。' }
   }
   if (/denied|no permission|not authorized|unauthorized|无权限/i.test(reason)) {
-    return { manual: true, diagnostic, hint: '当前微信未允许打开短信，请按下方步骤在手机短信中发送。' }
+    return { diagnostic, hint: '当前微信未获准打开短信。请手动打开手机短信，填写上方号码并粘贴正文。' }
   }
   if (/not support|unsupported|not implemented|不支持/i.test(reason)) {
-    return { manual: true, diagnostic, hint: '当前微信环境不支持直接打开短信。' }
+    return { diagnostic, hint: '当前微信无法打开短信。请手动打开手机短信，填写上方号码并粘贴正文。' }
   }
-  return { diagnostic }
+  return { diagnostic, hint: '未能打开短信。请手动打开手机短信，填写上方号码并粘贴正文。' }
 }
 
 function canOpenChat() {
@@ -71,7 +69,7 @@ Page({
   },
 
   onShow() {
-    if (this.hidden && this.smsAttempt) this.smsAttempt.opening = ''
+    if (this.hidden) this.smsAttempt = null
     this.hidden = false
     this.load()
   },
@@ -94,6 +92,7 @@ Page({
   clearDetails() {
     this.requestId = (this.requestId || 0) + 1
     this.details = null
+    this.clipboardRequest = null
     this.setData(EMPTY_DETAILS)
     return this.requestId
   },
@@ -112,27 +111,27 @@ Page({
       const { card, sms } = details
       if (!card || (smsOnly && !sms)) throw new Error('预订消息资料不完整，请联系店长或管理员。')
       const preview = { loading: false, card, message: invitationText(card) }
+      this.details = details
       if (smsOnly) {
-        const defaultMode = defaultSmsMode()
-        const supported = defaultMode !== 'manual'
         if (!this.smsSession || this.smsSession.id !== id || this.smsSession.version !== details.version) {
           this.smsAttempt = null
-          this.smsSession = { id, version: details.version, mode: '', diagnostic: '', hint: '' }
+          this.smsSession = { id, version: details.version, diagnostic: '', hint: '' }
         }
         const session = this.smsSession
         this.setData({
           ...preview,
-          phone: sms.phone || '', canCompose: supported,
-          smsMode: supported ? session.mode || defaultMode : 'manual', smsDiagnostic: session.diagnostic, smsHint: session.hint,
-          opening: this.smsAttempt ? this.smsAttempt.opening : '',
-          shortSms: compactSms(card),
-          cloudEnabled: sms.enabled && sms.status !== 'accepted' && sms.status !== 'pending',
-          cloudStatus: sms.status || '', cloudNote: sms.reason || '',
+          phone: sms.phone || '', canCompose: canOpenSms(),
+          smsDiagnostic: session.diagnostic, smsHint: session.hint, opening: Boolean(this.smsAttempt),
+        })
+      } else {
+        this.setData({
+          ...preview, canOpenChat: canOpenChat(),
+          phone: sms?.phone || '',
+          cloudEnabled: !details.trial && Boolean(sms?.enabled) && sms.status !== 'accepted' && sms.status !== 'pending',
+          cloudStatus: details.trial ? '' : sms?.status || '',
+          cloudNote: details.trial ? '' : sms?.reason || '',
           cloudFields: smsFields(card).join(' · '),
         })
-        this.details = details
-      } else {
-        this.setData({ ...preview, canOpenChat: canOpenChat() })
       }
     } catch (error) {
       if (this.requestId === requestId) {
@@ -184,53 +183,25 @@ Page({
     }
   },
 
-  copyForNumberOnly(event) {
-    const { smsMode, card, phone, opening, sending } = this.data
-    if (!this.smsSession || smsMode !== 'full' || !card || !phone || opening || sending || this.clipboardRequest) return
-    this.smsSession.mode = 'number'
-    this.setData({ smsMode: 'number' })
-    this.copy(event)
-  },
-
-  compose() {
-    const { message, smsMode, smsCopied } = this.data
-    if (smsMode === 'full') this.openSms('full', message)
-    else if (smsCopied === 'message') this.openSms('number')
-  },
-
-  composeShort() {
-    const { smsMode, shortSms } = this.data
-    if (smsMode !== 'full' && shortSms?.message) this.openSms('short', shortSms.message)
-  },
-
-  openSms(mode, content) {
-    const { card, smsOnly, phone, opening, sending, canCompose } = this.data
+  openSms(phone) {
     const session = this.smsSession
-    if (!session || !card || !smsOnly || !phone || !canCompose || opening || sending || this.clipboardRequest) return
-    const attempt = { opening: mode }
+    const attempt = {}
     this.smsAttempt = attempt
-    this.setData({ opening: mode, notice: '' })
-    const finish = (failure, opened = false) => {
+    this.setData({ opening: true })
+    const finish = failure => {
       if (this.smsAttempt !== attempt || this.smsSession !== session) return
       this.smsAttempt = null
-      if (failure && !failure.cancelled) {
-        if (failure.manual || mode === 'number') session.mode = 'manual'
-        else if (mode === 'full') session.mode = 'number'
-        session.diagnostic = failure.diagnostic
-        session.hint = failure.hint || (mode === 'short' ? '未能打开精简短信，可复制完整正文发送。' : '')
-      } else if (opened) {
-        if (mode !== 'short') session.mode = mode
-        session.diagnostic = ''
-        session.hint = ''
-      }
+      session.diagnostic = failure?.diagnostic || ''
+      session.hint = failure?.hint || ''
       if (!this.hidden && !this.unloaded && this.data.card) {
-        this.setData({ opening: '', smsMode: session.mode || this.data.smsMode, smsDiagnostic: session.diagnostic, smsHint: session.hint })
+        this.setData({ opening: false, smsDiagnostic: session.diagnostic, smsHint: session.hint })
       }
     }
     try {
+      // The text is on the clipboard so the native call can omit its length-limited body.
       wx.sendSms({
-        phoneNumber: phone, ...(content === undefined ? {} : { content }),
-        success: () => finish(null, true),
+        phoneNumber: phone,
+        success: () => finish(),
         fail: error => finish(smsFailure(error)),
         complete: () => finish(),
       })
@@ -239,26 +210,22 @@ Page({
     }
   },
 
-  copy(event) {
-    const { card, smsOnly, phone, message, opening, sending } = this.data
-    const field = smsOnly && event.currentTarget.dataset.field === 'phone' ? 'phone' : 'message'
-    const text = field === 'phone' ? phone : message
-    if (!card || !text || this.clipboardRequest || opening || sending) return
+  copy() {
+    const { card, smsOnly, phone, message, canCompose, opening, sending } = this.data
+    if (!card || !message || this.clipboardRequest || opening || sending || this.hidden || this.unloaded) return
 
-    const requestId = this.requestId
     const clipboardRequest = {}
     this.clipboardRequest = clipboardRequest
-    this.setData({ copyStatus: 'copying', smsCopied: '', chatNotice: '' })
+    this.setData({ copyStatus: 'copying', chatNotice: '', smsDiagnostic: '', smsHint: '' })
     const setStatus = copyStatus => {
       if (this.clipboardRequest !== clipboardRequest) return
       this.clipboardRequest = null
-      if (this.requestId === requestId) {
-        this.setData({ copyStatus, smsCopied: smsOnly && copyStatus === 'success' ? field : '' })
-      }
+      this.setData({ copyStatus })
+      if (copyStatus === 'success' && smsOnly && phone && canCompose) this.openSms(phone)
     }
     try {
       wx.setClipboardData({
-        data: text,
+        data: message,
         success: () => setStatus('success'),
         fail: () => setStatus('failed'),
       })
@@ -268,9 +235,9 @@ Page({
   },
 
   sendCloud() {
-    const { cloudEnabled, sending, opening, phone } = this.data
+    const { cloudEnabled, sending, smsOnly, phone } = this.data
     const details = this.details
-    if (!details || !cloudEnabled || sending || opening) return
+    if (!details || !cloudEnabled || sending || smsOnly) return
     wx.showModal({
       title: '用门店短信发送',
       content: '将使用门店短信服务向 ' + phone + ' 发送本次预订通知。',
@@ -281,8 +248,8 @@ Page({
   },
 
   async submitCloud(details) {
-    const { id, cloudEnabled, sending, opening } = this.data
-    if (this.details !== details || !cloudEnabled || sending || opening) return
+    const { id, cloudEnabled, sending, smsOnly } = this.data
+    if (this.details !== details || !cloudEnabled || sending || smsOnly) return
     this.setData({ sending: true, notice: '' })
     try {
       await api.call('notifySms', { id, version: details.version })

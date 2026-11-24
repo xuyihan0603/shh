@@ -56,7 +56,7 @@ test('共享服务仅更新职位，拒绝过期更新并撤销目标员工的�
 
   const roster = await call(manager, 'staffRoles')
   const current = roster.find(person => person.id === employee.id)
-  assert.deepEqual(current, { ...employee, active: true, nameBound: true })
+  assert.deepEqual(current, { ...employee, active: true, nameBound: true, servicePhone: '15500112233' })
   const roleChange = { id: current.id, role: 'manager', expectedRole: current.role }
   assert.equal((await call(oldSession, 'staffRoles', {}, 403)).code, 'FORBIDDEN')
   assert.equal((await call(oldSession, 'setStaffRole', roleChange, 403)).code, 'FORBIDDEN')
@@ -73,7 +73,7 @@ test('共享服务仅更新职位，拒绝过期更新并撤销目标员工的�
   assert.deepEqual(updates.map(update => update.status).sort(), [200, 409])
   assert.equal(updates.find(update => update.status === 409).data.code, 'VERSION_CONFLICT')
   assert.deepEqual(updates.find(update => update.status === 200).data, {
-    id: current.id, name: revised.name, role: 'manager', active: true, nameBound: true,
+    id: current.id, name: revised.name, role: 'manager', active: true, nameBound: true, servicePhone: revised.servicePhone,
   })
   for (const session of sessions) assert.equal((await call(session, 'bootstrap', {}, 401)).code, 'UNAUTHORIZED')
 
