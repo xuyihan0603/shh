@@ -31,8 +31,16 @@
     <input class="store-input" placeholder="请输入手机号" placeholder-class="store-placeholder" aria-label="服务手机号" value="{{servicePhone}}" data-name="servicePhone" bindinput="field" maxlength="24" disabled="{{busy}}" />
     <button class="store-button store-button-primary account-submit" loading="{{busy}}" disabled="{{busy || servicePhone === (me.servicePhone || '')}}" bindtap="saveProfile">保存手机号</button>
   </view>
+  <button wx:if="{{me && me.nameBound && (me.role === 'admin' || me.role === 'manager')}}" class="store-card staff-entry" disabled="{{busy}}" bindtap="openCustomers">
+    <text>客户档案</text>
+    <text class="account-next" aria-hidden="true">›</text>
+  </button>
   <button wx:if="{{me && me.nameBound && me.role === 'admin'}}" class="store-card staff-entry" disabled="{{busy}}" bindtap="openStaffRoles">
     <text>员工权限</text>
+    <text class="account-next" aria-hidden="true">›</text>
+  </button>
+  <button wx:if="{{me && me.nameBound && (me.role === 'admin' || me.role === 'manager')}}" class="store-card staff-entry" disabled="{{busy}}" bindtap="openTables">
+    <text>桌位管理</text>
     <text class="account-next" aria-hidden="true">›</text>
   </button>
 </view>

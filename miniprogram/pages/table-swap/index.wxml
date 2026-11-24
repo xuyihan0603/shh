@@ -1,0 +1,53 @@
+<view class="rec-page">
+  <view class="rec-body {{order && targetTables.length ? 'rec-body-with-dock' : ''}}">
+    <view wx:if="{{actionError}}" class="rec-alert swap-error">{{actionError}}</view>
+    <view wx:if="{{loading}}" class="rec-state">正在读取换桌资料…</view>
+    <view wx:elif="{{error}}" class="rec-state">
+      <view>{{error}}</view>
+      <button wx:if="{{needsName}}" class="rec-button rec-secondary" bindtap="openAccount">填写员工姓名</button>
+      <block wx:elif="{{id}}">
+        <button class="rec-button rec-secondary" bindtap="load">重新加载</button>
+        <button class="rec-text-button swap-back" bindtap="returnToOrder">返回订单</button>
+      </block>
+    </view>
+    <block wx:elif="{{order}}">
+      <view class="rec-panel swap-source">
+        <view class="rec-title">{{sourceTables.length > 1 ? '选择要换出的桌位' : '当前桌位'}}</view>
+        <view class="rec-muted swap-schedule">{{order.dateLabel}} · {{order.mealLabel}} · {{order.time}} · {{order.guests}} 人</view>
+        <view wx:if="{{sourceTables.length === 1}}" class="swap-current">
+          <text class="swap-name">{{sourceTables[0].name}}</text>
+          <text class="swap-floor {{sourceTables[0].floorTone ? 'rec-floor-label' : ''}} {{sourceTables[0].floorTone}}">{{sourceTables[0].floor}}</text>
+        </view>
+        <view wx:else class="swap-source-grid">
+          <button wx:for="{{sourceTables}}" wx:key="id" class="swap-source-table {{sourceId === item.id ? 'swap-selected' : ''}}" data-id="{{item.id}}" bindtap="pickSource" disabled="{{submitting}}" aria-label="{{item.floor}} {{item.name}} {{sourceId === item.id ? '已选' : ''}}">
+            <text class="swap-name">{{item.name}}</text>
+            <text class="swap-floor {{item.floorTone ? 'rec-floor-label' : ''}} {{item.floorTone}}">{{item.floor}}</text>
+            <text wx:if="{{sourceId === item.id}}" class="rec-muted">已选</text>
+          </button>
+        </view>
+      </view>
+
+      <view class="rec-title swap-target-heading">选择目标桌位</view>
+      <view wx:if="{{!targetTables.length}}" class="rec-state">这个餐段暂时没有可换的桌位。</view>
+      <block wx:else>
+        <scroll-view wx:if="{{floors.length > 2}}" scroll-x class="rec-chip-strip swap-floors" aria-label="楼层">
+          <button wx:for="{{floors}}" wx:key="id" class="rec-chip {{item.floorTone ? 'rec-floor-chip' : ''}} {{item.floorTone}} {{floor === item.id ? 'rec-chip-active' : ''}}" data-id="{{item.id}}" bindtap="pickFloor" disabled="{{submitting}}">{{item.label}}</button>
+        </scroll-view>
+        <view class="swap-target-grid">
+          <block wx:for="{{targetTables}}" wx:key="id">
+            <button wx:if="{{!floor || floor === item.floor}}" class="swap-target {{item.floorTone ? 'rec-floor-card' : ''}} {{item.floorTone}} {{targetId === item.id ? 'swap-selected' : ''}}" bindtap="pickTarget" data-id="{{item.id}}" disabled="{{submitting}}">
+              <text class="swap-name">{{item.name}}</text>
+              <text class="swap-floor {{item.floorTone ? 'rec-floor-label' : ''}} {{item.floorTone}}">{{item.floor}}</text>
+              <text class="rec-muted swap-capacity">{{item.capacityLabel}}</text>
+              <text class="rec-status rec-status-{{item.status}}">{{item.statusLabel}}{{targetId === item.id ? ' · 已选' : ''}}</text>
+            </button>
+          </block>
+        </view>
+      </block>
+    </block>
+  </view>
+
+  <view wx:if="{{order && targetTables.length}}" class="rec-dock">
+    <button class="rec-button rec-primary rec-grow" bindtap="confirmSwap" disabled="{{submitting || !sourceId || !targetId}}" loading="{{submitting}}">核对换桌</button>
+  </view>
+</view>

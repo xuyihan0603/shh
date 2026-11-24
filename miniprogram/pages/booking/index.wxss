@@ -97,6 +97,14 @@
   font-weight: 400;
 }
 
+.booking-swap-hint {
+  margin-top: 12rpx;
+}
+
+.booking-swap-link {
+  padding-left: 0;
+}
+
 .booking-floors,
 .booking-table-state,
 .booking-grid,

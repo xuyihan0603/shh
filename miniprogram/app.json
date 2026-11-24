@@ -1,9 +1,9 @@
 {
   "pages": [
-    "pages/access/index",
+    "pages/access/index", "pages/tables/index",
     "pages/index/index", "pages/orders/index", "pages/finance/index", "pages/account/index",
     "pages/booking/index", "pages/order/index", "pages/notify/index", "pages/invite/index", "pages/staff/index",
-    "pages/insights/index"
+    "pages/insights/index", "pages/table-swap/index", "pages/customers/index"
   ],
   "subPackages": [
     {

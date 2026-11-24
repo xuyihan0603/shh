@@ -1,9 +1,9 @@
 const { randomBytes, scryptSync, timingSafeEqual, createHash } = require('node:crypto')
-const { seed, execute, requireAdmin, isStaffId, ADMIN_ID, ROLES, readServicePhone } = require('../miniprogram/lib/domain')
+const { seed, execute, requireAdmin, isStaffId, ADMIN_ID, ROLES, readServicePhone, preserveBookingOwnerRole, revokeTableSwapAuthorizations } = require('../miniprogram/lib/domain')
 const { applyPilotMessageDefaults, applyPilotTableLayout } = require('../miniprogram/lib/pilot')
 
 const WECHAT_TEST_MODE = 'wechat-test'
-const writes = new Set(['save','cancel','arrive','settle','configure','import','staffSave','bindStaffName','setServicePhone','setStaffRole','setStaffProfile'])
+const writes = new Set(['save','setTableSwapAuthorization','swapTables','cancel','arrive','settle','configure','saveTable','import','staffSave','bindStaffName','setServicePhone','setStaffRole','setStaffProfile'])
 
 function fault(code, message) {
   return Object.assign(new Error(message), { code })
@@ -58,7 +58,7 @@ function refreshState(state) {
   return messageChanged || tablesChanged || rolesChanged
 }
 
-function updateStaff(state, input) {
+function updateStaff(state, actor, input) {
   const {id,name,role,password,active = true} = input
   if (!isStaffId(id) ||
       typeof name !== 'string' || !name.trim() || name.trim().length > 40 ||
@@ -72,6 +72,8 @@ function updateStaff(state, input) {
   const servicePhone = input.servicePhone === undefined ? old?.servicePhone : readServicePhone(input.servicePhone)
   const person = {id,name:name.trim(),role,active,nameBound: old?.nameBound === true,
     ...(servicePhone === undefined ? {} : {servicePhone})}
+  if (old && previousRole !== role) preserveBookingOwnerRole(state, old)
+  if (old && (!active || previousRole !== role)) revokeTableSwapAuthorizations(state, actor, id)
   if (old) Object.assign(old, person)
   else state.staff.push(person)
   const revoke = password || !active || (old && previousRole !== role)
@@ -86,7 +88,7 @@ function applyAction(state, actorId, action, input) {
     if (wechatTest && actor.role === 'pending') throw fault('ACCESS_PENDING','请等待管理员分配员工职位')
     requireAdmin(actor)
     if (wechatTest && action === 'staffSave') throw fault('FORBIDDEN','请在员工职位中分配已登记的微信员工')
-    if (action === 'staffSave') return updateStaff(state, input)
+    if (action === 'staffSave') return updateStaff(state, actor, input)
     return { result: state.staff.map(person => ({ ...person, active: person.active !== false, nameBound: person.nameBound === true })) }
   }
 

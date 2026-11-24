@@ -1,0 +1,51 @@
+<view class="store-page tables-page">
+  <view wx:if="{{loading}}" class="store-card store-state">正在读取桌位…</view>
+  <view wx:elif="{{error}}" class="store-card store-state">
+    <view role="alert">{{error}}</view>
+    <button class="store-link" bindtap="load">重新读取</button>
+  </view>
+  <block wx:elif="{{allowed}}">
+    <view wx:if="{{editing}}" class="store-card table-form">
+      <view class="store-heading">{{existing ? '编辑桌位' : '新增桌位'}}</view>
+      <view class="table-field">
+        <text class="store-field-label">桌名</text>
+        <input class="store-input" aria-label="桌名" value="{{form.name}}" placeholder="例如 厅1" maxlength="40" data-field="name" bindinput="field" disabled="{{saving}}" />
+      </view>
+      <view class="table-fields">
+        <view><text class="store-field-label">楼层</text>
+          <picker range="{{floors}}" value="{{floorIndex}}" bindchange="selectFloor" disabled="{{saving}}">
+            <view class="store-input table-picker">{{form.floor}} <text class="store-chevron">⌄</text></view>
+          </picker>
+        </view>
+        <view><text class="store-field-label">桌型</text>
+          <picker range="{{types}}" range-key="label" value="{{typeIndex}}" bindchange="selectType" disabled="{{saving}}">
+            <view class="store-input table-picker">{{types[typeIndex].label}} <text class="store-chevron">⌄</text></view>
+          </picker>
+        </view>
+      </view>
+      <view class="table-fields">
+        <view><text class="store-field-label">最少人数</text>
+          <input class="store-input" type="number" aria-label="最少人数" value="{{form.minCapacity}}" placeholder="待补充" data-field="minCapacity" bindinput="field" disabled="{{saving}}" />
+        </view>
+        <view><text class="store-field-label">最多人数</text>
+          <input class="store-input" type="number" aria-label="最多人数" value="{{form.capacity}}" placeholder="待补充" data-field="capacity" bindinput="field" disabled="{{saving}}" />
+        </view>
+      </view>
+      <view wx:if="{{formError}}" class="store-error table-field" role="alert">{{formError}}</view>
+      <view class="table-fields">
+        <button class="store-button store-button-quiet" bindtap="cancel" disabled="{{saving}}">取消</button>
+        <button class="store-button store-button-primary" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存桌位</button>
+      </view>
+    </view>
+    <block wx:else>
+      <button class="store-button store-button-primary add-table" bindtap="edit">新增桌位</button>
+      <view wx:for="{{groups}}" wx:key="floor" class="store-card table-group">
+        <view class="table-heading"><text class="store-heading">{{item.floor}}</text><text class="store-caption">{{item.tables.length}} 桌</text></view>
+        <button wx:for="{{item.tables}}" wx:for-item="table" wx:key="id" data-id="{{table.id}}" bindtap="edit" class="table-row {{table.floorTone}}" aria-label="编辑{{table.floor}}{{table.name}}">
+          <view class="table-summary"><text class="table-name">{{table.name}}</text><text class="store-caption">{{table.typeLabel || '桌型待补充'}} · {{table.capacityLabel}}</text></view>
+          <text class="table-edit">编辑</text>
+        </button>
+      </view>
+    </block>
+  </block>
+</view>

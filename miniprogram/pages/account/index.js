@@ -1,5 +1,5 @@
 const api = require('../../lib/api')
-const { ROLES, canBook } = require('../../lib/reception')
+const { ROLES, canBook, canManageOrders } = require('../../lib/reception')
 
 Page({
   data: { name: '', servicePhone: '', bookingStaff: false, loading: true, busy: false, error: '', me: null, store: null },
@@ -50,8 +50,19 @@ Page({
     }
   },
 
+  openCustomers() {
+    const { me, busy } = this.data
+    if (!busy && me?.nameBound && canManageOrders(me.role)) wx.navigateTo({ url: '/pages/customers/index' })
+  },
+
   openStaffRoles() {
     const { me, busy } = this.data
     if (!busy && me?.nameBound && me.role === 'admin') wx.navigateTo({ url: '/pages/staff/index' })
+  },
+  openTables() {
+    const { me, busy } = this.data
+    if (!busy && me?.nameBound && (me.role === 'manager' || me.role === 'admin')) {
+      wx.navigateTo({ url: '/pages/tables/index' })
+    }
   },
 })

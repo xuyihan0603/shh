@@ -134,22 +134,37 @@ function managesOrder(actor, order) {
   return handlesStoreOrders(actor) || ownsOrder(actor, order)
 }
 
+function isSwappableBooking(order) {
+  return order.kind === 'booking' && order.status === 'booked'
+}
+
+function activeSalesOwner(state, order) {
+  return state.staff.find(person => person.id === order.ownerId && person.role === 'sales' && person.active !== false)
+}
+
 function permissions(actor, order) {
   const reception = handlesStoreOrders(actor)
   const open = order.status === 'booked' || order.status === 'arrived'
   const editable = open && managesOrder(actor, order)
   return {
     canEdit: editable,
+    canEditTables: open && reception,
     canCancel: editable,
     canArrive: reception && order.status === 'booked',
     canSettle: order.status !== 'cancelled' && (reception || (actor.role === 'finance' && order.amount === null)),
   }
 }
 
-function showOrder(actor, order) {
+function showOrder(state, actor, order) {
   const authorized = managesOrder(actor, order)
   const phone = normalizePhone(order.phone)
-  const { customerVisit, ownerServicePhone, ...orderFields } = order
+  const { customerVisit, ownerRole, ownerServicePhone, tableSwapStaffId, ...orderFields } = order
+  const swappable = isSwappableBooking(order)
+  const reception = handlesStoreOrders(actor)
+  const ownBooking = swappable && ownsOrder(actor, order)
+  const swapOwner = swappable && reception ? activeSalesOwner(state, order) : null
+  const canAuthorizeTableSwap = Boolean(swapOwner)
+  const tableSwapAuthorized = (canAuthorizeTableSwap || ownBooking) && tableSwapStaffId === order.ownerId
   return {
     ...orderFields,
     phone: authorized ? (phone || order.phone) : maskPhone(phone),
@@ -157,6 +172,11 @@ function showOrder(actor, order) {
     tableNames: order.tableNames.slice(),
     logs: authorized || actor.role === 'finance' ? order.logs.map(log => ({ ...log })) : [],
     ...permissions(actor, order),
+    canSwapTables: swappable && (reception || tableSwapAuthorized),
+    canAuthorizeTableSwap,
+    ...(swapOwner ? { tableSwapStaffName: swapOwner.name } : {}),
+    tableSwapAuthorized,
+    requiresTableSwapAuthorization: ownBooking && !tableSwapAuthorized,
   }
 }
 
@@ -187,7 +207,15 @@ function staffDetails(person) {
   return { ...accountProfile(person), active: person.active !== false }
 }
 
-function manageStaffRoles(state, actor, action, data) {
+function preserveBookingOwnerRole(state, person) {
+  for (const order of state.orders) {
+    if (order.kind === 'booking' && order.ownerId === person.id && order.ownerRole === undefined) {
+      order.ownerRole = person.role
+    }
+  }
+}
+
+function manageStaffRoles(state, actor, action, data, instant) {
   requireAdmin(actor)
   if (action === 'staffRoles') return state.staff.map(staffDetails)
 
@@ -201,6 +229,10 @@ function manageStaffRoles(state, actor, action, data) {
   if (!person) fail('NOT_FOUND', '未找到该员工账号')
   if (person.role !== expectedRole) fail('VERSION_CONFLICT', '员工职位已变更，请刷新后重试')
 
+  if (person.role !== role) {
+    preserveBookingOwnerRole(state, person)
+    revokeTableSwapAuthorizations(state, actor, id, instant)
+  }
   person.role = role
   return staffDetails(person)
 }
@@ -326,7 +358,7 @@ function listOrders(state, actor, data) {
   const source = phone ? matchingPhone(state, actor, phone) : state.orders
   return source.filter(order => (!date || order.date === date) && (!meal || order.meal === meal))
     .sort((first, second) => second.date.localeCompare(first.date) || first.time.localeCompare(second.time))
-    .map(order => showOrder(actor, order))
+    .map(order => showOrder(state, actor, order))
 }
 
 function listStoreOrders(state, actor, data) {
@@ -364,6 +396,11 @@ function visitFor(order) {
   }
 }
 
+function summarizeCustomer(contact, visits) {
+  const segment = segmentForVisits(visits)
+  return { contact, visits, segment: segment && { id: segment.id, label: segment.label } }
+}
+
 function customerForPhone(state, phone) {
   let visits = 0
   let latestNamedVisit = null
@@ -377,12 +414,7 @@ function customerForPhone(state, phone) {
     }
   }
   if (!visits) return null
-  const { id, label } = segmentForVisits(visits)
-  return {
-    contact: latestNamedVisit ? latestNamedVisit.contact : '',
-    visits,
-    segment: { id, label },
-  }
+  return summarizeCustomer(latestNamedVisit?.contact || '', visits)
 }
 
 function lookupCustomer(state, actor, data) {
@@ -398,8 +430,66 @@ function findCustomer(state, actor, data) {
   return {
     ...(customer || { contact: '', visits: 0, segment: null }),
     phone,
-    orders: orders.map(order => showOrder(actor, order)),
+    orders: orders.map(order => showOrder(state, actor, order)),
   }
+}
+
+function listCustomerDirectory(state, actor, data) {
+  if (!handlesStoreOrders(actor)) fail('FORBIDDEN', '仅店长和管理员可查看客户档案')
+  const query = readText(data.query, '姓名或联系电话').toLowerCase()
+  if (query.length > 80) fail('VALIDATION', '查询内容不能超过 80 个字符')
+  const digits = normalizePhone(query) || query.replace(/[\s()+-]/g, '')
+  const phoneSearch = /^\d+$/.test(digits)
+  const afterPhone = readPhone(data.afterPhone)
+  const staff = new Map(state.staff.map(person => [person.id, person]))
+  const profiles = new Map()
+
+  for (const order of state.orders) {
+    if (order.status === 'cancelled') continue
+    const visited = hasVisited(order)
+    const record = visited ? visitFor(order) : order
+    const phone = normalizePhone(record.phone)
+    if (!phone || phone <= afterPhone) continue
+    let customer = profiles.get(phone)
+    if (!customer) {
+      customer = {
+        phone, visits: 0, cents: 0, pending: 0, namedVisit: null, namedBooking: null,
+        salesBookings: new Map(), matches: !query || (phoneSearch && phone.includes(digits)),
+      }
+      profiles.set(phone, customer)
+    }
+    const contact = typeof record.contact === 'string' ? record.contact.trim() : ''
+    if (contact) {
+      const field = visited ? 'namedVisit' : 'namedBooking'
+      if (!customer[field] || compareServiceTime(record, customer[field]) >= 0) {
+        customer[field] = { date: record.date, time: record.time, contact }
+      }
+      if (contact.toLowerCase().includes(query)) customer.matches = true
+    }
+    if (visited) {
+      customer.visits++
+      if (order.status === 'settled' && order.amount != null) customer.cents += Math.round(order.amount * 100)
+      else customer.pending++
+    }
+    const person = staff.get(order.ownerId)
+    if (order.kind !== 'booking' || (order.ownerRole ?? person?.role) !== 'sales') continue
+    const booking = customer.salesBookings.get(order.ownerId)
+    if (booking) booking.count++
+    else customer.salesBookings.set(order.ownerId, {
+      staffId: order.ownerId, name: person?.name || order.ownerName || '未登记姓名', count: 1,
+    })
+  }
+
+  const matches = [...profiles.values()].filter(customer => customer.matches)
+    .sort((first, second) => first.phone.localeCompare(second.phone))
+  const pageSize = 25
+  const page = matches.slice(0, pageSize)
+  const customers = page.map(({ phone, visits, cents, pending, namedVisit, namedBooking, salesBookings }) => ({
+    phone, ...summarizeCustomer((namedVisit || namedBooking)?.contact || '', visits), amount: cents / 100, pending,
+    salesBookings: [...salesBookings.values()].sort((first, second) =>
+      second.count - first.count || first.name.localeCompare(second.name)),
+  }))
+  return { customers, next: matches.length > pageSize ? page[pageSize - 1].phone : '' }
 }
 
 function emptyCustomerCounts() {
@@ -454,10 +544,10 @@ function resolveTables(state, tableIds) {
   })
 }
 
-function checkTables(state, current, date, meal, tables) {
+function checkTables(state, current, date, meal, tables, other = null) {
   const occupied = new Set()
   for (const order of state.orders) {
-    if (order === current || order.date !== date || order.meal !== meal || order.status === 'cancelled') continue
+    if (order === current || order === other || order.date !== date || order.meal !== meal || order.status === 'cancelled') continue
     for (const id of order.tableIds) occupied.add(id)
   }
   const conflicts = tables.filter(table => occupied.has(table.id))
@@ -471,17 +561,126 @@ function audit(actor, instant, action) {
   return { at: instant.toISOString(), actorId: actor.id, actorName: actor.name, action }
 }
 
+function revokeTableSwapAuthorizations(state, actor, staffId, instant = new Date()) {
+  for (const order of state.orders) {
+    if (order.tableSwapStaffId !== staffId) continue
+    delete order.tableSwapStaffId
+    order.version++
+    order.logs.push(audit(actor, instant, '员工权限变更，撤回换桌授权'))
+  }
+}
+
+function checkTableSwapVersion(order, version) {
+  if (order.version !== version) fail('VERSION_CONFLICT', '预订已更新，请刷新后重新确认换桌')
+}
+
+function requireSwappableBooking(order) {
+  if (!isSwappableBooking(order)) fail('VALIDATION', '仅待到店预订可在此换桌')
+}
+
+function setTableSwapAuthorization(state, actor, data, instant) {
+  if (!handlesStoreOrders(actor)) fail('FORBIDDEN', '仅店长和管理员可管理换桌授权')
+  const order = findOrder(state, data.id)
+  const { staffId } = data
+  if (staffId === null && !order.tableSwapStaffId) return showOrder(state, actor, order)
+  checkTableSwapVersion(order, data.version)
+
+  const updated = { ...order, version: order.version + 1 }
+  let action = '撤回换桌授权'
+  if (staffId === null) {
+    delete updated.tableSwapStaffId
+  } else {
+    requireSwappableBooking(order)
+    const owner = activeSalesOwner(state, order)
+    if (!owner || owner.id !== staffId) fail('VALIDATION', '仅可授权该笔预订的在职营销接单人')
+    if (order.tableSwapStaffId === staffId) return showOrder(state, actor, order)
+    updated.tableSwapStaffId = staffId
+    action = `授权${owner.name}换桌`
+  }
+  updated.logs = order.logs.concat(audit(actor, instant, action))
+  state.orders[state.orders.indexOf(order)] = updated
+  return showOrder(state, actor, updated)
+}
+
+function readTableSwapOrder(state, actor, data, checkVersion = true) {
+  const reception = handlesStoreOrders(actor)
+  if (!reception && actor.role !== 'sales') fail('FORBIDDEN', '当前岗位无权换桌')
+  const order = findOrder(state, data.id)
+  if (!reception && !ownsOrder(actor, order)) fail('FORBIDDEN', '营销只能从本人接单的预订发起换桌')
+  if (checkVersion) checkTableSwapVersion(order, data.version)
+  requireSwappableBooking(order)
+  if (!reception && order.tableSwapStaffId !== actor.id) fail('FORBIDDEN', '请联系店长或管理员授权本单换桌')
+  return order
+}
+
+function tableSwapOptions(state, actor, data) {
+  const order = readTableSwapOrder(state, actor, data, data.version !== undefined)
+  const { date, meal, tables } = forBoard(state, order)
+  const candidates = new Map(state.orders.filter(item =>
+    item !== order && item.date === date && item.meal === meal && isSwappableBooking(item))
+    .map(item => [item.id, item]))
+  const capacities = new Map(tables.map(table => [table.id, table.capacity]))
+  const options = tables.filter(table => !table.orderId || candidates.has(table.orderId))
+    .map(({ ownerName, ...table }) => {
+      const target = candidates.get(table.orderId)
+      if (!target) return table
+      const otherCapacities = target.tableIds.filter(id => id !== table.id).map(id => capacities.get(id))
+      const otherTablesCapacity = otherCapacities.every(Number.isSafeInteger)
+        ? otherCapacities.reduce((count, capacity) => count + capacity, 0)
+        : null
+      return { ...table, orderVersion: target.version, orderGuests: target.guests, otherTablesCapacity }
+    })
+  return {
+    order: showOrder(state, actor, order), date, meal,
+    sourceTables: resolveTables(state, order.tableIds).map(table => ({ ...table })),
+    tables: options,
+  }
+}
+
+function describeTableChange(before, after) {
+  return `换桌（${before.tableNames.join('、')} → ${after.tableNames.join('、')}）`
+}
+
+function replaceOrderTable(order, from, to, actor, instant) {
+  const index = order.tableIds.indexOf(from.id)
+  const updated = { ...order, tableIds: order.tableIds.slice(), tableNames: order.tableNames.slice(), version: order.version + 1 }
+  updated.tableIds[index] = to.id
+  updated.tableNames[index] = to.name
+  updated.logs = order.logs.concat(audit(actor, instant, describeTableChange(order, updated)))
+  delete updated.tableSwapStaffId
+  return updated
+}
+
+function swapTables(state, actor, data, instant) {
+  const order = readTableSwapOrder(state, actor, data)
+  const [from, to] = resolveTables(state, [data.fromTableId, data.toTableId])
+  if (!order.tableIds.includes(from.id) || order.tableIds.includes(to.id)) fail('VALIDATION', '请选择本单原桌和另一张目标桌')
+  const exchanging = data.targetId !== undefined || data.targetVersion !== undefined
+  const target = exchanging ? findOrder(state, readText(data.targetId, '交换预订编号', true)) : null
+  if (target) {
+    checkTableSwapVersion(target, data.targetVersion)
+    requireSwappableBooking(target)
+    if (target.date !== order.date || target.meal !== order.meal) fail('VALIDATION', '只能交换同一用餐日与餐段的预订桌位')
+    if (!target.tableIds.includes(to.id) || target.tableIds.includes(from.id)) {
+      fail('TABLE_CONFLICT', '目标桌位的预订已变更，请刷新后重新选桌', { tableIds: [to.id] })
+    }
+  }
+  checkTables(state, order, order.date, order.meal, target ? [from, to] : [to], target)
+
+  const updated = replaceOrderTable(order, from, to, actor, instant)
+  if (target) state.orders[state.orders.indexOf(target)] = replaceOrderTable(target, to, from, actor, instant)
+  state.orders[state.orders.indexOf(order)] = updated
+  return showOrder(state, actor, updated)
+}
+
 function depositDescription(order) {
   if (!order.deposit) return '未收订金'
   return `${order.deposit} 元，${order.depositMethod}，经手人 ${order.depositHandler}`
 }
 
-function describeChanges(current, updated) {
+function describeChanges(current, updated, changedTables) {
   const actions = []
-  if (updated.tableIds.length !== current.tableIds.length ||
-      updated.tableIds.some(id => !current.tableIds.includes(id))) {
-    actions.push(`换桌（${current.tableNames.join('、')} → ${updated.tableNames.join('、')}）`)
-  }
+  if (changedTables) actions.push(describeTableChange(current, updated))
   if (['date', 'meal', 'time', 'guests', 'contact', 'phone', 'notes'].some(field => current[field] !== updated[field])) {
     actions.push('修改订单信息')
   }
@@ -535,17 +734,21 @@ function saveOrder(state, actor, data, instant, importing = false) {
   if (originalAssignment && (createdDate > currentDate || createdDate > date)) {
     fail('VALIDATION', '接单日期不能晚于今天或用餐日期')
   }
-  checkTables(state, current, date, meal, tables)
-
   const fields = {
     date, meal, time, guests, contact, phone, notes, kind, deposit, depositMethod, depositHandler,
     tableIds: tables.map(table => table.id),
     tableNames: tables.map(table => table.name),
   }
+  const changedTables = current && (fields.tableIds.length !== current.tableIds.length ||
+    fields.tableIds.some(id => !current.tableIds.includes(id)))
+  if (changedTables && !handlesStoreOrders(actor)) fail('FORBIDDEN', '营销更换已有预订桌位须先获授权，再使用换桌操作')
+  checkTables(state, current, date, meal, tables)
+
   if (current) {
     const updated = { ...current, ...fields }
-    const actions = describeChanges(current, updated)
-    if (!actions.length) return showOrder(actor, current)
+    const actions = describeChanges(current, updated, changedTables)
+    if (!actions.length) return showOrder(state, actor, current)
+    if (changedTables || date !== current.date || meal !== current.meal) delete updated.tableSwapStaffId
     if (hasVisited(current)) {
       // Keep the number recorded at check-in when the order's contact number changes.
       const visit = visitFor(current)
@@ -556,7 +759,7 @@ function saveOrder(state, actor, data, instant, importing = false) {
     updated.logs = current.logs.concat(actions.map(action => audit(actor, instant, action)))
     updated.version++
     state.orders[state.orders.indexOf(current)] = updated
-    return showOrder(actor, updated)
+    return showOrder(state, actor, updated)
   }
 
   const action = importing ? '录入存量预订' : kind === 'walkin' ? '登记散客' : '创建预订'
@@ -569,6 +772,7 @@ function saveOrder(state, actor, data, instant, importing = false) {
     version: 1,
     ownerId: owner.id,
     ownerName: owner.name,
+    ...(kind === 'booking' ? { ownerRole: owner.role } : {}),
     ...(ownerServicePhone ? { ownerServicePhone } : {}),
     createdDate,
     amount: null,
@@ -578,7 +782,7 @@ function saveOrder(state, actor, data, instant, importing = false) {
   if (hasVisited(order)) order.customerVisit = visitFor(order)
   state.orders.push(order)
   state.nextOrderNumber++
-  return showOrder(actor, order)
+  return showOrder(state, actor, order)
 }
 
 function changeStatus(state, actor, action, data, instant) {
@@ -590,7 +794,7 @@ function changeStatus(state, actor, action, data, instant) {
   let description = action === 'cancel' ? '取消订单' : '登记到店'
   if (action === 'settle') {
     amount = readMoney(data.amount, '最终消费额')
-    if (current.status === 'settled' && amount === current.amount) return showOrder(actor, current)
+    if (current.status === 'settled' && amount === current.amount) return showOrder(state, actor, current)
     description = current.amount === null
       ? `录入最终消费额（${amount} 元）`
       : `修改最终消费额（${current.amount} 元 → ${amount} 元）`
@@ -599,9 +803,10 @@ function changeStatus(state, actor, action, data, instant) {
     ...current, status, amount, version: current.version + 1,
     logs: current.logs.concat(audit(actor, instant, description)),
   }
+  delete updated.tableSwapStaffId
   if (hasVisited(updated)) updated.customerVisit = visitFor(current)
   state.orders[state.orders.indexOf(current)] = updated
-  return showOrder(actor, updated)
+  return showOrder(state, actor, updated)
 }
 
 function emptyTotals() {
@@ -641,7 +846,7 @@ function forReport(state, actor, data) {
   }
   return {
     date, period, basis: 'meal', rows: Array.from(rows.values(), inYuan), total: inYuan(total),
-    details: orders.map(order => showOrder(actor, order)),
+    details: orders.map(order => showOrder(state, actor, order)),
   }
 }
 
@@ -650,16 +855,7 @@ function readTableCapacity(value, label) {
   return raw == null || raw === '' ? null : readPositiveInteger(raw, label)
 }
 
-function configure(state, actor, data) {
-  if (actor.role !== 'admin') fail('FORBIDDEN', '仅管理员可以修改门店配置')
-  const storeInput = data.store === undefined ? state.store : { ...state.store, ...readObject(data.store, '门店资料') }
-  const store = {
-    name: readText(storeInput.name, '门店名称', true),
-    address: readText(storeInput.address, '门店地址'),
-    phone: readText(storeInput.phone, '门店电话'),
-  }
-  readPhone(store.phone)
-  const tableInput = data.tables === undefined ? state.tables : data.tables
+function validateTables(state, tableInput) {
   if (!Array.isArray(tableInput)) fail('VALIDATION', '桌位清单格式不正确')
   const previousTables = new Map(state.tables.map(table => [table.id, table]))
   const tableIds = new Set()
@@ -687,8 +883,76 @@ function configure(state, actor, data) {
   for (const order of state.orders) {
     if (order.tableIds.some(id => !tableIds.has(id))) fail('VALIDATION', '不能删除已有订单记录的桌位')
   }
-  state.store = store
+  return tables
+}
+
+function sameTable(a, b) {
+  return a && b && ['id', 'name', 'floor', 'type', 'minCapacity', 'capacity']
+    .every(key => (a[key] ?? null) === (b[key] ?? null))
+}
+
+function applyTables(state, tables, actor, instant) {
+  const previous = new Map(state.tables.map(table => [table.id, table]))
+  const changed = new Map()
+  for (const table of tables) {
+    const before = previous.get(table.id)
+    if (before && ['name', 'floor', 'type'].some(key => before[key] !== table[key])) changed.set(table.id, table)
+  }
+  if (changed.size) {
+    for (const order of state.orders) {
+      if (order.status !== 'booked' && order.status !== 'arrived') continue
+      if (!order.tableIds.some(id => changed.has(id))) continue
+      order.tableNames = order.tableIds.map((id, i) => changed.get(id)?.name ?? order.tableNames[i])
+      order.version++
+      order.logs.push(audit(actor, instant, '更新桌位资料'))
+    }
+  }
   state.tables = tables
+}
+
+function saveTable(state, actor, data, instant) {
+  if (!handlesStoreOrders(actor)) fail('FORBIDDEN', '仅店长和管理员可以维护桌位')
+  const input = readObject(data.table, '桌位资料')
+  const name = readText(input.name, '桌名', true)
+  const previous = data.id === undefined ? null : state.tables.find(table => table.id === data.id)
+  if (data.id !== undefined && !sameTable(previous, data.expected)) {
+    fail('VERSION_CONFLICT', '这张桌的资料已变更，请重新打开后核对')
+  }
+  let id = previous ? previous.id : name
+  if (!previous && state.tables.some(table => table.id === id)) {
+    let serial = state.tables.length + 1
+    do { id = 'table-' + serial++ } while (state.tables.some(table => table.id === id))
+  }
+  const edited = { ...input, id, name }
+  const next = state.tables.slice()
+  if (previous && previous.floor === edited.floor) {
+    next[next.indexOf(previous)] = edited
+  } else {
+    if (previous) next.splice(next.indexOf(previous), 1)
+    const lastOnFloor = next.map(table => table.floor).lastIndexOf(edited.floor)
+    next.splice(lastOnFloor < 0 ? next.length : lastOnFloor + 1, 0, edited)
+  }
+  const tables = validateTables(state, next)
+  applyTables(state, tables, actor, instant)
+  return { ...tables.find(table => table.id === id) }
+}
+
+function configure(state, actor, data, instant) {
+  if (actor.role !== 'admin') fail('FORBIDDEN', '仅管理员可以修改门店配置')
+  const storeInput = data.store === undefined ? state.store : { ...state.store, ...readObject(data.store, '门店资料') }
+  const store = {
+    name: readText(storeInput.name, '门店名称', true),
+    address: readText(storeInput.address, '门店地址'),
+    phone: readText(storeInput.phone, '门店电话'),
+  }
+  readPhone(store.phone)
+  if (data.expectedTables !== undefined && (!Array.isArray(data.expectedTables) ||
+      data.expectedTables.length !== state.tables.length || !state.tables.every((table, i) => sameTable(table, data.expectedTables[i])))) {
+    fail('VERSION_CONFLICT', '桌位配置已变更，请刷新页面后核对')
+  }
+  const tables = validateTables(state, data.tables === undefined ? state.tables : data.tables)
+  applyTables(state, tables, actor, instant)
+  state.store = store
   return { store: { ...store }, tables: tables.map(table => ({ ...table })) }
 }
 
@@ -730,7 +994,7 @@ function execute(state, actorId, action, data = {}, instant = new Date()) {
     }
   }
   if (pending && action !== 'setServicePhone') fail('ACCESS_PENDING', '请等待管理员分配员工职位')
-  if (action === 'staffRoles' || action === 'setStaffRole') return manageStaffRoles(state, actor, action, data)
+  if (action === 'staffRoles' || action === 'setStaffRole') return manageStaffRoles(state, actor, action, data, instant)
   if (action === 'setStaffProfile') return setStaffProfile(state, actor, data)
   requireStaffName(actor)
   switch (action) {
@@ -740,20 +1004,25 @@ function execute(state, actorId, action, data = {}, instant = new Date()) {
     case 'board': return forBoard(state, data)
     case 'orders': return listOrders(state, actor, data)
     case 'storeOrders': return listStoreOrders(state, actor, data)
-    case 'order': return showOrder(actor, findOrder(state, data.id))
+    case 'order': return showOrder(state, actor, findOrder(state, data.id))
     case 'notificationContext': return notificationContext(state, actor, data)
     case 'save': return saveOrder(state, actor, data, instant)
+    case 'tableSwapOptions': return tableSwapOptions(state, actor, data)
+    case 'setTableSwapAuthorization': return setTableSwapAuthorization(state, actor, data, instant)
+    case 'swapTables': return swapTables(state, actor, data, instant)
     case 'arrive':
     case 'cancel':
     case 'settle': return changeStatus(state, actor, action, data, instant)
     case 'customer': return findCustomer(state, actor, data)
+    case 'customerDirectory': return listCustomerDirectory(state, actor, data)
     case 'customerLookup': return lookupCustomer(state, actor, data)
     case 'customerInsights': return forCustomerInsights(state, actor, data, instant)
     case 'report': return forReport(state, actor, data)
-    case 'configure': return configure(state, actor, data)
+    case 'saveTable': return saveTable(state, actor, data, instant)
+    case 'configure': return configure(state, actor, data, instant)
     case 'import': return importOrders(state, actor, data, instant)
     default: fail('VALIDATION', '不支持这项操作')
   }
 }
 
-module.exports = { seed, execute, today, profile, requireStaffName, requireAdmin, isStaffId, ADMIN_ID, ROLES, normalizeServicePhone, readServicePhone }
+module.exports = { seed, execute, today, profile, requireStaffName, requireAdmin, isStaffId, ADMIN_ID, ROLES, normalizeServicePhone, readServicePhone, preserveBookingOwnerRole, revokeTableSwapAuthorizations }

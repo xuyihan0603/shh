@@ -1,0 +1,54 @@
+<view class="store-page customers-page">
+  <view wx:if="{{ready}}" class="store-card customers-search">
+    <view class="customers-search-row">
+      <input class="store-input customers-input" value="{{draft}}" placeholder="姓名或联系电话" placeholder-class="store-placeholder" aria-label="搜索客户姓名或联系电话" maxlength="80" confirm-type="search" bindinput="changeDraft" bindconfirm="search" />
+      <button class="store-button store-button-primary customers-search-button" bindtap="search">搜索</button>
+    </view>
+    <button wx:if="{{query}}" class="store-link customers-clear" bindtap="clearSearch">清除搜索</button>
+  </view>
+
+  <view wx:if="{{error}}" class="store-card store-state">
+    <text role="alert">{{error}}</text>
+    <button wx:if="{{needsAccount}}" class="store-link" bindtap="openAccount">去我的</button>
+    <button wx:else class="store-link" bindtap="retry">重新加载</button>
+  </view>
+  <view wx:elif="{{loading}}" class="store-card store-state">正在读取客户档案…</view>
+  <view wx:elif="{{!customers.length}}" class="store-card store-state">{{query ? '没有匹配的客户档案。' : '暂无留有联系电话的客户档案。'}}</view>
+  <block wx:else>
+    <view class="store-caption customers-scope">已到店和已结账订单每笔计一次到店，消费按最终金额累计。营销预订含待到店，按有效预订计次。</view>
+    <view wx:for="{{customers}}" wx:key="phone" class="store-card customers-profile">
+      <view class="customers-profile-head">
+        <view class="customers-identity">
+          <view class="store-heading">{{item.contact || '未登记姓名'}}</view>
+          <text class="customers-phone" user-select="true">{{item.phone}}</text>
+        </view>
+        <text wx:if="{{item.segment}}" class="customers-segment customers-{{item.segment.id}}">{{item.segment.label}}</text>
+      </view>
+
+      <view class="customers-metrics">
+        <view class="customers-metric">
+          <text class="store-caption">实际到店</text>
+          <view class="customers-value">{{item.visits}} <text class="store-caption">次</text></view>
+        </view>
+        <view class="customers-metric">
+          <text class="store-caption">已录消费</text>
+          <view class="customers-value">{{item.amountText}}</view>
+          <text wx:if="{{item.pending}}" class="store-caption customers-pending">待补 {{item.pending}} 笔</text>
+        </view>
+      </view>
+
+      <view class="customers-sales">
+        <text class="customers-sales-label">营销预订</text>
+        <text wx:if="{{!item.salesBookings.length}}" class="store-caption">暂无</text>
+        <view wx:for="{{item.salesBookings}}" wx:for-item="booking" wx:key="staffId" class="customers-sales-row">
+          <text class="customers-sales-name">{{booking.name}}</text>
+          <text class="customers-sales-count">{{booking.count}} 次</text>
+        </view>
+      </view>
+    </view>
+    <view wx:if="{{next}}" class="customers-more">
+      <view wx:if="{{moreError}}" class="store-error" role="alert">{{moreError}}</view>
+      <button class="store-button store-button-quiet" disabled="{{loadingMore}}" loading="{{loadingMore}}" bindtap="loadMore">{{moreError ? '重试加载' : '加载更多'}}</button>
+    </view>
+  </block>
+</view>

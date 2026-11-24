@@ -6,6 +6,10 @@
     </picker>
     <button wx:if="{{endDate !== maxDate}}" class="store-link insights-today" bindtap="useToday">回到今天</button>
   </view>
+  <button wx:if="{{canViewCustomers}}" class="store-card insights-directory" bindtap="openCustomers">
+    <text>客户档案</text>
+    <text aria-hidden="true">›</text>
+  </button>
   <view wx:if="{{error}}" class="store-card store-state insights-card">
     <text role="alert">{{error}}</text>
     <button wx:if="{{needsAccount}}" class="store-link" bindtap="openAccount">去我的</button>

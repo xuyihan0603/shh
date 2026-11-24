@@ -1,0 +1,45 @@
+@import "../../styles/settings.wxss";
+
+.customers-page { display: flex; flex-direction: column; gap: 18rpx; }
+.customers-search { padding: 20rpx; }
+.customers-search-row { display: flex; align-items: center; gap: 12rpx; }
+.customers-input { flex: 1; min-width: 0; }
+.customers-search-button { flex-shrink: 0; min-height: 88rpx; }
+.customers-clear { margin-top: 6rpx; }
+.customers-scope { padding: 0 4rpx; }
+
+.customers-profile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.customers-identity { flex: 1; min-width: 0; }
+.customers-phone { display: block; margin-top: 6rpx; color: var(--store-muted); font-size: 27rpx; }
+.customers-segment { flex-shrink: 0; padding: 5rpx 14rpx; border-radius: 999rpx; font-size: 24rpx; font-weight: 650; }
+.customers-new { background: var(--store-sea); color: var(--store-deep); }
+.customers-potential { background: var(--store-gold-light); color: var(--store-gold); }
+.customers-vvip { background: #eee8f4; color: #523e68; }
+
+.customers-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr);
+  margin-top: 20rpx;
+  padding: 17rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f3f7f6;
+}
+
+.customers-metric { min-width: 0; }
+.customers-metric + .customers-metric { padding-left: 18rpx; border-left: 1rpx solid var(--store-border); }
+.customers-value { color: var(--store-deep); font-size: 38rpx; font-weight: 650; line-height: 1.3; word-break: break-word; }
+.customers-pending { color: var(--store-gold); }
+
+.customers-sales { margin-top: 20rpx; }
+.customers-sales-label { display: block; margin-bottom: 7rpx; color: var(--store-deep); font-size: 26rpx; font-weight: 650; }
+.customers-sales-row { display: flex; justify-content: space-between; gap: 14rpx; padding: 7rpx 0; }
+.customers-sales-row + .customers-sales-row { border-top: 1rpx solid var(--store-border); }
+.customers-sales-name { min-width: 0; }
+.customers-sales-count { flex-shrink: 0; color: var(--store-deep); font-weight: 600; }
+.customers-more { display: grid; gap: 12rpx; }

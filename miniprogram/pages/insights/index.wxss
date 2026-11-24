@@ -11,6 +11,19 @@
 
 .insights-toolbar { padding: 20rpx 22rpx; }
 .insights-today { flex-shrink: 0; }
+.insights-directory {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 80rpx;
+  margin: 18rpx 0 0;
+  padding: 15rpx 22rpx;
+  color: var(--store-deep);
+  font-size: 28rpx;
+  font-weight: 650;
+  line-height: 1.4;
+}
 .insights-card { margin-top: 18rpx; }
 .insights-overview { border-top: 3rpx solid var(--store-bronze); }
 

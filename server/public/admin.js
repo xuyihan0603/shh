@@ -602,7 +602,7 @@ async function settle(form) {
 
 async function saveConfig(form) {
   const token = state.token
-  const updated = await api('configure', configDraft(form))
+  const updated = await api('configure', { ...configDraft(form), expectedTables: state.context.tables })
   if (state.token !== token) return
   Object.assign(state.context, updated)
   if (!form.isConnected) return

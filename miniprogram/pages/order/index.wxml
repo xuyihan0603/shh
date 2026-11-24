@@ -25,7 +25,7 @@
       </view>
 
       <view wx:if="{{order.canNotify}}" class="order-notify">
-        <button class="rec-button rec-secondary" bindtap="openNotification" data-channel="wechat" disabled="{{mutating}}">预订消息</button>
+        <button class="rec-button rec-secondary" bindtap="openNotification" data-channel="wechat" disabled="{{mutating}}">发送微信</button>
         <button class="rec-button rec-secondary" bindtap="openNotification" data-channel="sms" disabled="{{mutating}}">发送短信</button>
       </view>
 
@@ -75,6 +75,15 @@
         <view class="order-line">
           <text class="order-label">桌位</text>
           <text class="order-value">{{order.tableLabel || '—'}}</text>
+          <button wx:if="{{order.canSwapTables}}" class="rec-text-button order-swap-action" bindtap="openTableSwap" disabled="{{mutating}}">换桌</button>
+        </view>
+        <view wx:if="{{order.canAuthorizeTableSwap || order.tableSwapAuthorized || order.requiresTableSwapAuthorization}}" class="order-swap-access">
+          <view class="rec-muted order-swap-label">
+            <text wx:if="{{order.canAuthorizeTableSwap}}">{{order.tableSwapStaffName}}{{order.tableSwapAuthorized ? '已获一次换桌授权' : '尚未获换桌授权'}}</text>
+            <text wx:elif="{{order.tableSwapAuthorized}}">本单已获一次换桌授权</text>
+            <text wx:else>换桌请联系店长或管理员授权</text>
+          </view>
+          <button wx:if="{{order.canAuthorizeTableSwap}}" class="rec-text-button order-swap-action" bindtap="askTableSwapAuthorization" disabled="{{mutating}}">{{order.tableSwapAuthorized ? '撤回授权' : '授权换桌'}}</button>
         </view>
         <view class="order-line">
           <text class="order-label">用餐人数</text>

@@ -1,0 +1,102 @@
+@import "../../lib/reception.wxss";
+
+.swap-error {
+  margin-bottom: 16rpx;
+}
+
+.swap-back {
+  margin-top: 8rpx;
+}
+
+.swap-source {
+  border-top: 4rpx solid #bd9354;
+}
+
+.swap-schedule {
+  margin-top: 6rpx;
+}
+
+.swap-current {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 16rpx;
+}
+
+.swap-name {
+  max-width: 100%;
+  color: #103947;
+  font-size: 31rpx;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.swap-source-grid,
+.swap-target-grid {
+  display: grid;
+  gap: 12rpx;
+}
+
+.swap-source-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 16rpx;
+}
+
+.swap-source-table,
+.swap-target {
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  border: 1rpx solid #d4e2e1;
+  border-radius: 14rpx;
+  background: #fff;
+  color: #103947;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.swap-source-table::after,
+.swap-target::after {
+  border: 0;
+}
+
+.swap-source-table {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx 14rpx;
+  min-height: 76rpx;
+  padding: 12rpx 14rpx;
+}
+
+.swap-target-heading {
+  margin: 24rpx 0 14rpx;
+}
+
+.swap-floors {
+  margin-bottom: 16rpx;
+}
+
+.swap-target-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.swap-target {
+  flex-direction: column;
+  gap: 7rpx;
+  min-height: 168rpx;
+  padding: 14rpx 16rpx;
+}
+
+.swap-selected {
+  border-color: #103947;
+  background: #e8f1f1;
+  box-shadow: inset 0 0 0 1rpx #103947;
+}
+
+.swap-floor,
+.swap-capacity {
+  font-size: 22rpx;
+}

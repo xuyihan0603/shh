@@ -114,7 +114,7 @@ test('首次绑定只更新当前账号，并在不同服务连接间保留接�
 })
 
 test('两个服务连接抢同一桌，冲突不占其他桌；旧版本换桌不能覆盖成功操作', async t=>{
-  const {send,staff} = await fixture(t)
+  const {send,staff,manager} = await fixture(t)
   const a = await staff('a','sales'), b = await staff('b','sales')
   const base = {date:today(),meal:'lunch',kind:'booking',time:'12:30',guests:4,contact:'验收客人',phone:'13800000099'}
   const responses = await Promise.all([
@@ -131,10 +131,137 @@ test('两个服务连接抢同一桌，冲突不占其他桌；旧版本换桌�
   assert.equal(board.tables.find(t=>t.id===spare).orderId,null)
   assert.equal((await send('/api/order',{id:order.id},loser)).body.phone,'138****0099')
   assert.equal((await send('/api/save',{id:order.id,version:order.version,guests:3},loser)).status,403)
-  const changed = (await send('/api/save',{id:order.id,version:order.version,tableIds:[spare]},token)).body
+  const change = {id:order.id,version:order.version,fromTableId:'202',toTableId:spare}
+  assert.equal((await send('/api/save',{id:order.id,version:order.version,tableIds:[spare]},token)).status,403)
+  assert.equal((await send('/api/swapTables',change,token)).status,403)
+  const authorization = await send('/api/setTableSwapAuthorization',{id:order.id,version:order.version,staffId:order.ownerId},manager)
+  assert.equal(authorization.status,200,authorization.body.error)
+  const {status,body:changed} = await send('/api/swapTables',{...change,version:authorization.body.version},token,1)
+  assert.equal(status,200,changed.error)
+  assert.equal(changed.tableSwapAuthorized,false)
+  assert.deepEqual(changed.tableIds,order.tableIds.map(id=>id==='202' ? spare : id))
   assert.equal((await send('/api/cancel',{id:order.id,version:order.version},token)).body.code,'VERSION_CONFLICT')
   assert.equal((await send('/api/order',{id:order.id},token,1)).body.version,changed.version)
   assert.equal((await send('/api/order',{id:order.id,actorId:'manager'})).status,401)
+})
+
+test('授权换桌跨服务原子交换两笔多桌预订，校验目标状态及双方版本', async t => {
+  const { send, staff, manager, store } = await fixture(t)
+  const first = await staff('first-seller', 'sales')
+  const second = await staff('second-seller', 'sales')
+  const lead = await staff('store-lead', 'manager')
+  const base = { date: today(), meal: 'dinner', time: '19:00', guests: 8, contact: '第一桌客人', phone: '13800000091' }
+  const source = (await send('/api/save', {
+    ...base, tableIds: ['201', '202'], deposit: 120, depositMethod: '微信',
+  }, first)).body
+  const target = (await send('/api/save', {
+    ...base, tableIds: ['203', '205', '厅1'], contact: '第二桌客人', phone: '13800000092', guests: 12,
+  }, second)).body
+  const lunch = (await send('/api/save', {
+    ...base, meal: 'lunch', time: '12:00', tableIds: ['203'],
+  }, second)).body
+  const walkIn = (await send('/api/save', {
+    date: base.date, meal: base.meal, tableIds: ['206'], guests: 4, kind: 'walkin',
+  }, manager)).body
+  const authorization = { id: source.id, version: source.version, staffId: source.ownerId }
+  assert.equal((await send('/api/setTableSwapAuthorization', authorization, first)).status, 403)
+  assert.equal((await send('/api/setTableSwapAuthorization', { ...authorization, staffId: target.ownerId }, lead)).status, 400)
+  const granted = await send('/api/setTableSwapAuthorization', authorization, lead)
+  assert.equal(granted.status, 200, granted.body.error)
+
+  const revoke = { ...authorization, staffId: null, version: granted.body.version }
+  const revoked = await send('/api/setTableSwapAuthorization', revoke, manager, 1)
+  assert.equal(revoked.status, 200, revoked.body.error)
+  assert.deepEqual(await send('/api/setTableSwapAuthorization', revoke, lead), revoked)
+  assert.equal((await send('/api/tableSwapOptions', { id: source.id }, first)).status, 403)
+  const regranted = await send('/api/setTableSwapAuthorization', { ...authorization, version: revoked.body.version }, lead)
+  assert.equal(regranted.status, 200, regranted.body.error)
+
+  const options = await send('/api/tableSwapOptions', { id: source.id }, first, 1)
+  assert.equal(options.status, 200, options.body.error)
+  assert.equal(options.body.order.version, regranted.body.version)
+  assert.equal((await send('/api/tableSwapOptions', { id: source.id }, second)).status, 403)
+  assert.deepEqual(options.body.sourceTables.map(table => table.id), ['201', '202'])
+  assert.equal(options.body.tables.some(table => table.id === '206'), false)
+  const candidate = options.body.tables.find(table => table.id === '203')
+  assert.equal(candidate.orderId, target.id)
+  assert.equal(candidate.orderVersion, target.version)
+  assert.equal(candidate.orderGuests, target.guests)
+  assert.equal(candidate.otherTablesCapacity, null)
+  assert.equal(options.body.tables.find(table => table.id === '厅1').otherTablesCapacity, 24)
+  for (const field of ['contact', 'phone', 'notes', 'deposit', 'ownerName']) assert.equal(Object.hasOwn(candidate, field), false)
+
+  const exchange = {
+    id: source.id, version: options.body.order.version, fromTableId: '201', toTableId: '203',
+    targetId: candidate.orderId, targetVersion: candidate.orderVersion,
+  }
+  assert.equal((await send('/api/swapTables', { ...exchange, targetId: lunch.id, targetVersion: lunch.version }, first)).status, 400)
+  assert.equal((await send('/api/swapTables', {
+    ...exchange, toTableId: '206', targetId: walkIn.id, targetVersion: walkIn.version,
+  }, first)).status, 400)
+  const targetEdit = (await send('/api/save', { id: target.id, version: target.version, notes: '保留变更的备注' }, second, 1)).body
+  const unchanged = store.read().orders
+  assert.equal((await send('/api/swapTables', exchange, first)).body.code, 'VERSION_CONFLICT')
+  assert.deepEqual(store.read().orders, unchanged)
+
+  const current = { ...exchange, targetVersion: targetEdit.version }
+  const attempts = await Promise.all([0, 1].map(connection => send('/api/swapTables', current, first, connection)))
+  assert.deepEqual(attempts.map(result => result.status).sort(), [200, 409])
+  const updated = attempts.find(result => result.status === 200).body
+  assert.equal(updated.tableSwapAuthorized, false)
+  assert.equal(updated.canSwapTables, false)
+  assert.equal(updated.deposit, source.deposit)
+  assert.equal(updated.depositHandler, source.depositHandler)
+  assert.equal(updated.ownerId, source.ownerId)
+  assert.equal(updated.guests, source.guests)
+  assert.deepEqual(updated.tableIds, ['203', '202'])
+  assert.match(updated.logs.at(-1).action, /换桌.*201.*203/)
+  const other = (await send('/api/order', { id: target.id }, second, 1)).body
+  assert.deepEqual(other.tableIds, ['201', '205', '厅1'])
+  assert.equal(other.version, targetEdit.version + 1)
+  assert.equal(other.ownerId, target.ownerId)
+  assert.equal(other.phone, target.phone)
+  assert.equal(other.guests, target.guests)
+  assert.equal(other.notes, targetEdit.notes)
+  assert.match(other.logs.at(-1).action, /换桌.*203.*201/)
+  assert.equal((await send('/api/swapTables', {
+    id: updated.id, version: updated.version, fromTableId: '203', toTableId: '207',
+  }, first)).status, 403)
+})
+
+test('营销改岗或停用时撤回换桌授权，恢复岗位或启用后需重新授权', async t => {
+  const { send, staff, manager } = await fixture(t)
+  const employee = { id: 'returning-seller', name: '叶晓泉', role: 'sales' }
+  const seller = await staff(employee.id, employee.role, { name: employee.name })
+  const created = await send('/api/save', {
+    date: today(), meal: 'dinner', time: '18:00', tableIds: ['201'], guests: 4,
+    contact: '测试预订', phone: '13800000093',
+  }, seller)
+  assert.equal(created.status, 200, created.body.error)
+  let order = created.body
+  const cycles = [
+    {
+      action: 'setStaffRole',
+      change: { id: employee.id, role: 'finance', expectedRole: 'sales' },
+      restore: { id: employee.id, role: 'sales', expectedRole: 'finance' },
+    },
+    { action: 'staffSave', change: { ...employee, role: 'finance' }, restore: employee },
+    { action: 'staffSave', change: { ...employee, active: false }, restore: employee },
+  ]
+  for (const { action, change, restore } of cycles) {
+    const granted = await send('/api/setTableSwapAuthorization', {
+      id: order.id, version: order.version, staffId: employee.id,
+    }, manager)
+    assert.equal(granted.status, 200, granted.body.error)
+    assert.equal(granted.body.tableSwapAuthorized, true)
+    assert.equal((await send('/api/' + action, change, manager, 1)).status, 200)
+    assert.equal((await send('/api/' + action, restore, manager)).status, 200)
+    const latest = await send('/api/order', { id: order.id }, manager, 1)
+    assert.equal(latest.body.canAuthorizeTableSwap, true)
+    assert.equal(latest.body.tableSwapAuthorized, false)
+    assert.equal(latest.body.version, granted.body.version + 1)
+    order = latest.body
+  }
 })
 
 test('同单一份公开邀请随换桌更新、取消失效；短信模板和重试采用同一订单',async t=>{
@@ -295,4 +422,36 @@ test('调整员工角色或停用后原会话失效',async t=>{
   assert.equal((await send('/api/report',{date:today(),basis:'meal'},token)).status,200)
   assert.equal((await send('/api/staffSave',{id:'bookkeeper',name:'员工',role:'sales'},manager)).status,200)
   assert.equal((await send('/api/report',{date:today(),basis:'meal'},token)).status,401)
+})
+
+test('仅实名管理员和店长可通过接口读取完整客户档案，财务仍可读取客群汇总', async t => {
+  const {send, staff, manager} = await fixture(t)
+  const lead = await staff('lead', 'manager')
+  const seller = await staff('seller', 'sales', {name:'王兰'})
+  const finance = await staff('finance', 'finance')
+  const unbound = await staff('unbound', 'manager', {bound:false})
+  const book = await send('/api/save', {
+    date:today(), meal:'lunch', time:'12:30', tableIds:['201','202'], guests:4,
+    contact:'王女士', phone:'13800000109',
+  }, seller)
+  assert.equal(book.status, 200)
+  assert.equal((await send('/api/settle', {...book.body, amount:125.4}, lead)).status, 200)
+
+  const route = '/api/customerDirectory'
+  const data = {query:'王女士'}
+  for (const token of [seller, finance]) {
+    assert.deepEqual(await send(route, data, token), {status:403, body:{code:'FORBIDDEN', error:'仅店长和管理员可查看客户档案'}})
+  }
+  assert.equal((await send(route, data)).status, 401)
+  assert.equal((await send(route, data, unbound)).body.code, 'NAME_REQUIRED')
+  for (const token of [manager, lead]) {
+    const result = await send(route, data, token, 1)
+    assert.equal(result.status, 200)
+    const [profile] = result.body.customers
+    assert.deepEqual(profile, {
+      phone:'13800000109', contact:'王女士', visits:1, amount:125.4, pending:0, segment:{id:'new', label:'新客'},
+      salesBookings:[{staffId:'seller', name:'王兰', count:1}],
+    })
+  }
+  assert.deepEqual((await send('/api/customerInsights', {}, finance)).body.summary, {new:1, potential:0, vvip:0})
 })

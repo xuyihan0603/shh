@@ -9,6 +9,9 @@ Page({
     orderId: '',
     version: null,
     editing: false,
+    canEditTables: true,
+    canSwapTables: false,
+    requiresTableSwapAuthorization: false,
     isWalkIn: false,
     form: {
       date: '', meal: 'lunch', time: '', tableIds: [], guests: '', contact: '', phone: '',
@@ -112,6 +115,10 @@ Page({
         } = order
         this.setData({
           isWalkIn, version: order.version, showTables: false, showDeposit: Boolean(deposit),
+          canEditTables: order.canEditTables ?? canManageOrders(me.role),
+          canSwapTables: order.canSwapTables || false,
+          requiresTableSwapAuthorization: order.requiresTableSwapAuthorization || false,
+          selectedNames: (order.tableNames || []).join('、'),
           dateLabel: dateLabel(date, today()),
           timeDefault: meal === 'dinner' ? '18:00' : '12:00',
           form: {
@@ -139,7 +146,7 @@ Page({
   async loadBoard() {
     const request = (this.boardRequest || 0) + 1
     this.boardRequest = request
-    const { date, meal } = this.data.form
+    const { canEditTables, form: { date, meal } } = this.data
     this.setData({ boardLoading: true, boardError: '' })
     try {
       const { tables: boardTables } = await call('board', { date, meal })
@@ -154,11 +161,15 @@ Page({
       if (removed.length) {
         const names = tables.filter(table => removed.includes(table.id)).map(table => table.name)
         this.setData({
-          tableConflict: names.length ? names.join('、') + ' 已被占用，请重新选桌。' : '有桌位已不可选，请重新选桌。',
-          showTables: true,
+          tableConflict: canEditTables
+            ? (names.length ? names.join('、') + ' 已被占用，请重新选桌。' : '有桌位已不可选，请重新选桌。')
+            : '原桌位在所选餐段已不可用。请调整用餐日期或餐段，或返回订单详情处理换桌。',
+          showTables: canEditTables,
         })
+      } else if (!canEditTables) {
+        this.setData({ tableConflict: '' })
       }
-      this.showSelection(available)
+      this.showSelection(canEditTables ? available : chosen)
     } catch (error) {
       if (request !== this.boardRequest) return
       this.setData({ showTables: true, boardLoading: false, boardError: errorMessage(error, '桌态加载失败，请重试。') })
@@ -210,7 +221,7 @@ Page({
   },
 
   selectTable(event) {
-    if (this.data.saving || this.data.boardLoading || this.data.boardError) return
+    if (!this.data.canEditTables || this.data.saving || this.data.boardLoading || this.data.boardError) return
     const table = this.data.tables.find(item => item.id === event.currentTarget.dataset.id)
     if (!table || !table.available) return
     const { tableIds } = this.data.form
@@ -219,7 +230,7 @@ Page({
   },
 
   toggleTables() {
-    this.setData({ showTables: !this.data.showTables })
+    if (this.data.canEditTables) this.setData({ showTables: !this.data.showTables })
   },
 
   toggleDeposit() {
@@ -278,14 +289,15 @@ Page({
   },
 
   revealTables() {
+    if (!this.data.canEditTables) return
     this.setData({ showTables: true }, () => {
       wx.pageScrollTo({ selector: '#booking-tables', duration: 180 })
     })
   },
 
   async save() {
-    const { form, orderId, version, saving, boardLoading, boardError, staleVersion, contextError } = this.data
-    if (saving || boardLoading || boardError || staleVersion || contextError) return
+    const { form, orderId, version, saving, boardLoading, boardError, staleVersion, contextError, canEditTables, tableConflict } = this.data
+    if (saving || boardLoading || boardError || staleVersion || contextError || (!canEditTables && tableConflict)) return
     const { date, meal, time, tableIds, kind } = form
     if (!tableIds.length) {
       this.revealTables()
@@ -328,7 +340,8 @@ Page({
       }
       const order = await call('save', {
         ...(orderId ? { id: orderId, version } : {}),
-        date, meal, time, tableIds, guests, contact, phone, kind, deposit,
+        ...(canEditTables ? { tableIds } : {}),
+        date, meal, time, guests, contact, phone, kind, deposit,
         notes: (form.notes || '').trim(),
         depositMethod,
         depositHandler: (form.depositHandler || '').trim(),
@@ -336,11 +349,14 @@ Page({
       this.finish(order)
     } catch (error) {
       if (error.code === 'TABLE_CONFLICT') {
-        const conflicts = new Set(error.tableIds || [])
-        this.showSelection(tableIds.filter(id => !conflicts.has(id)))
-        this.setData({ tableConflict: errorMessage(error, '有桌位已被占用，请重新选桌。') })
-        this.revealTables()
+        if (canEditTables) {
+          const conflicts = new Set(error.tableIds || [])
+          this.showSelection(tableIds.filter(id => !conflicts.has(id)))
+          this.setData({ tableConflict: errorMessage(error, '有桌位已被占用，请重新选桌。') })
+          this.revealTables()
+        }
         await this.loadBoard()
+        if (!canEditTables && !this.data.tableConflict) this.fieldError('提交时原桌位已被占用，请核对后重试。')
       } else if (error.code === 'VERSION_CONFLICT') {
         this.setData({ staleVersion: true })
       } else {

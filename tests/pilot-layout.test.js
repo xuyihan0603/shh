@@ -6,6 +6,7 @@ const path = require('node:path')
 const { execute } = require('../miniprogram/lib/domain')
 const { openStore } = require('../server/database')
 const { ADMIN_ID } = require('../server/store-rules')
+const { pilotLayout, applyPilotTableLayout } = require('../miniprogram/lib/pilot')
 
 test('打开已有门店会更正旧桌号并保留预订占用和自定义桌位', t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shh-layout-test-'))
@@ -62,4 +63,48 @@ test('打开已有门店会更正旧桌号并保留预订占用和自定义桌�
   store.close()
   store = openStore(directory)
   assert.equal(store.run(ADMIN_ID, 'bootstrap').tables.find(table => table.id === '203').minCapacity, 11)
+})
+
+test('上一版已配置的门店只增补四张一楼散台，保留已有自定义容量和桌名', () => {
+  const state = pilotLayout()
+  delete state.pilotHallTablesApplied
+  const halls = ['厅1', '厅2', '厅3', '厅5']
+  state.tables = state.tables.filter(table => !halls.includes(table.name))
+  state.tables.find(table => table.id === '103').name = '海景房'
+  const existing = { id: 'hall-2', name: '厅2', floor: '一楼', type: 'hall', minCapacity: 5, capacity: 7 }
+  state.tables.splice(4, 0, existing)
+  assert.equal(applyPilotTableLayout(state), true)
+  const additions = state.tables.filter(table => halls.includes(table.name))
+  assert.equal(state.tables.length, 28)
+  assert.equal(additions.length, 4)
+  assert.ok(additions.every(table => table.floor === '一楼' && table.type === 'hall'))
+  assert.ok(additions.filter(table => table !== existing).every(table => table.minCapacity === null && table.capacity === null))
+  assert.equal(state.tables.find(table => table.name === '厅2'), existing)
+  assert.equal(state.tables.find(table => table.id === '103').name, '海景房')
+  state.tables.find(table => table.name === '厅1').name = '临窗桌'
+  assert.equal(applyPilotTableLayout(state), false)
+  assert.equal(state.tables.length, 28)
+})
+
+test('店长和管理员分桌维护，更新已占桌的资料后原订单和占用仍一致', () => {
+  const state = require('../miniprogram/lib/domain').seed()
+  Object.assign(state.staff[0], { name: '张明', nameBound: true })
+  for (const role of ['finance', 'manager', 'sales']) state.staff.push({ id: 'user-' + role, role, name: '郑阳', nameBound: true })
+  const table = { name: '临窗桌', floor: '一楼', type: 'hall', minCapacity: '', capacity: '' }
+  for (const role of ['sales', 'finance']) {
+    assert.throws(() => execute(state, 'user-' + role, 'saveTable', { table }), { code: 'FORBIDDEN' })
+  }
+  const original = execute(state, 'user-manager', 'saveTable', { table })
+  assert.throws(() => execute(state, ADMIN_ID, 'saveTable', { table }), { code: 'VALIDATION' })
+  const second = execute(state, ADMIN_ID, 'saveTable', { table: { ...table, floor: '二楼' } })
+  assert.notEqual(second.id, original.id)
+  const slot = { date: '2030-01-06', meal: 'dinner' }
+  const booking = execute(state, 'user-sales', 'save', { ...slot, time: '18:00', tableIds: [original.id], guests: 3, contact: '陈先生', phone: '13800000001' })
+  const data = { id: original.id, expected: original, table: { ...table, name: '窗边1', minCapacity: 4, capacity: 6 } }
+  execute(state, ADMIN_ID, 'saveTable', data)
+  assert.throws(() => execute(state, 'user-manager', 'saveTable', data), { code: 'VERSION_CONFLICT' })
+  const order = execute(state, 'user-sales', 'order', { id: booking.id })
+  assert.deepEqual(order.tableNames, ['窗边1'])
+  assert.equal(order.version, booking.version + 1)
+  assert.equal(execute(state, ADMIN_ID, 'board', slot).tables.find(t => t.id === original.id).orderId, booking.id)
 })

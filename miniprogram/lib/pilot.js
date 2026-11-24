@@ -1,6 +1,8 @@
+const hallNames = ['厅1', '厅2', '厅3', '厅5']
 const floors = [
   ['一楼', [
     ['101', 10, 10], ['103', 4, 6], ['105', 6, 8], ['卡1', 4, 4],
+    ...hallNames.map(name => [name, null, null]),
   ]],
   ['二楼', [
     ['201', 10, 12], ['202', 4, 4], ['203', 12, 14], ['205', 8, 10],
@@ -14,7 +16,7 @@ const floors = [
 ]
 
 const pilotTables = floors.flatMap(([floor, seats]) => seats.map(([name, minCapacity, capacity]) => ({
-  id: name, name, floor, type: name === '卡1' ? 'hall' : 'room', minCapacity, capacity,
+  id: name, name, floor, type: name === '卡1' || hallNames.includes(name) ? 'hall' : 'room', minCapacity, capacity,
 })))
 const pilotTableIds = new Set(pilotTables.map(table => table.id))
 
@@ -54,7 +56,15 @@ function findPilotTable(tables, template) {
 }
 
 function applyPilotTableLayout(state) {
-  if (state.store.name !== PILOT_STORE.name || state.pilotTableLayoutApplied) return false
+  if (state.store.name !== PILOT_STORE.name) return false
+  if (state.pilotTableLayoutApplied) {
+    if (state.pilotHallTablesApplied) return false
+    const additions = pilotTables.filter(table => hallNames.includes(table.name) && !findPilotTable(state.tables, table))
+    const insertAt = state.tables.map(table => table.floor).lastIndexOf('一楼') + 1
+    state.tables.splice(insertAt, 0, ...additions.map(table => ({ ...table })))
+    state.pilotHallTablesApplied = true
+    return true
+  }
 
   const tables = state.tables.slice()
   const corrected = pilotTables.find(table => table.id === '203')
@@ -89,6 +99,7 @@ function applyPilotTableLayout(state) {
   })
   state.tables = updated.concat(tables.filter(table => !matched.has(table.id)))
   state.pilotTableLayoutApplied = true
+  state.pilotHallTablesApplied = true
   return true
 }
 
@@ -97,6 +108,7 @@ function pilotLayout() {
     store: { ...PILOT_STORE },
     tables: pilotTables.map(table => ({ ...table })),
     pilotTableLayoutApplied: true,
+    pilotHallTablesApplied: true,
   }
   applyPilotMessageDefaults(layout)
   return layout

@@ -51,15 +51,19 @@
       <view id="booking-tables" class="rec-panel booking-panel">
         <view class="rec-between booking-panel-head">
           <view class="rec-title">桌位</view>
-          <button class="rec-text-button" bindtap="toggleTables">{{showTables ? '收起' : '选择桌位'}}</button>
+          <button wx:if="{{canEditTables}}" class="rec-text-button" bindtap="toggleTables">{{showTables ? '收起' : '选择桌位'}}</button>
         </view>
         <view wx:if="{{selectedNames}}" class="booking-selected">
           <text>{{selectedNames}}</text>
-          <text class="rec-muted">{{form.tableIds.length}} 桌 · {{selectedCapacityLabel}}</text>
+          <text class="rec-muted">{{form.tableIds.length}} 桌{{selectedCapacityLabel ? ' · ' + selectedCapacityLabel : ''}}</text>
         </view>
         <view wx:elif="{{!boardLoading && !boardError}}" class="rec-muted">尚未选桌</view>
+        <block wx:if="{{!canEditTables}}">
+          <button wx:if="{{canSwapTables}}" class="rec-text-button booking-swap-link" bindtap="goBack" disabled="{{saving}}">返回订单详情换桌</button>
+          <view wx:elif="{{requiresTableSwapAuthorization}}" class="rec-muted booking-swap-hint">换桌请联系店长或管理员授权。</view>
+        </block>
         <view wx:if="{{tableConflict}}" class="rec-alert booking-conflict">{{tableConflict}}</view>
-        <block wx:if="{{showTables}}">
+        <block wx:if="{{canEditTables ? showTables : boardError}}">
           <view wx:if="{{boardLoading}}" class="rec-state booking-table-state">正在查看桌位…</view>
           <view wx:elif="{{boardError}}" class="rec-state booking-table-state">
             <view>{{boardError}}</view>
@@ -67,13 +71,14 @@
           </view>
           <block wx:else>
             <scroll-view wx:if="{{floors.length > 2}}" scroll-x class="rec-chip-strip booking-floors" aria-label="楼层">
-              <button wx:for="{{floors}}" wx:key="id" class="rec-chip {{floor === item.id ? 'rec-chip-active' : ''}}" data-id="{{item.id}}" bindtap="pickFloor">{{item.label}}</button>
+              <button wx:for="{{floors}}" wx:key="id" class="rec-chip {{item.floorTone ? 'rec-floor-chip' : ''}} {{item.floorTone}} {{floor === item.id ? 'rec-chip-active' : ''}}" data-id="{{item.id}}" bindtap="pickFloor">{{item.label}}</button>
             </scroll-view>
             <view wx:if="{{!visibleTables.length}}" class="rec-state booking-table-state">没有桌位</view>
             <view wx:else class="booking-grid">
-              <button wx:for="{{visibleTables}}" wx:key="id" data-id="{{item.id}}" bindtap="selectTable" disabled="{{saving || !item.available}}" class="booking-table {{item.selected ? 'booking-table-selected' : ''}} {{item.available ? '' : 'booking-table-busy'}} {{item.status === 'booked' ? 'booking-table-booked' : ''}}">
+              <button wx:for="{{visibleTables}}" wx:key="id" data-id="{{item.id}}" bindtap="selectTable" disabled="{{saving || !item.available}}" class="booking-table {{item.floorTone ? 'rec-floor-card' : ''}} {{item.floorTone}} {{item.selected ? 'booking-table-selected' : ''}} {{item.available ? '' : 'booking-table-busy'}} {{item.status === 'booked' ? 'booking-table-booked' : ''}}">
                 <text class="booking-table-name">{{item.name}}{{item.typeLabel === '卡座' ? ' · 卡座' : ''}}</text>
                 <text class="booking-table-meta">{{item.capacityLabel}}</text>
+                <text wx:if="{{!floor && item.floor}}" class="booking-table-state-label {{item.floorTone ? 'rec-floor-label' : ''}}">{{item.floor}}</text>
                 <text wx:if="{{item.selected || !item.available}}" class="booking-table-state-label">{{item.selected ? '已选' : item.statusLabel}}</text>
                 <text wx:if="{{item.status === 'booked' && item.ownerName}}" class="booking-table-owner">{{item.ownerName}}</text>
               </button>
@@ -137,6 +142,6 @@
   </view>
 
   <view wx:if="{{!contextLoading && !contextError}}" class="rec-dock booking-dock">
-    <button class="rec-button rec-primary rec-grow" loading="{{saving}}" disabled="{{saving || boardLoading || boardError || staleVersion}}" bindtap="save">{{editing ? '保存修改' : (isWalkIn ? '确认到店' : '确认预订')}}</button>
+    <button class="rec-button rec-primary rec-grow" loading="{{saving}}" disabled="{{saving || boardLoading || boardError || staleVersion || (!canEditTables && tableConflict)}}" bindtap="save">{{editing ? '保存修改' : (isWalkIn ? '确认到店' : '确认预订')}}</button>
   </view>
 </view>

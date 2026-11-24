@@ -66,14 +66,14 @@
     </view>
     <block wx:else>
       <scroll-view wx:if="{{floors.length > 2}}" scroll-x class="rec-chip-strip board-floors" aria-label="楼层">
-        <button wx:for="{{floors}}" wx:key="id" class="rec-chip {{floor === item.id ? 'rec-chip-active' : ''}}" data-id="{{item.id}}" bindtap="pickFloor">{{item.label}}</button>
+        <button wx:for="{{floors}}" wx:key="id" class="rec-chip {{item.floorTone ? 'rec-floor-chip' : ''}} {{item.floorTone}} {{floor === item.id ? 'rec-chip-active' : ''}}" data-id="{{item.id}}" bindtap="pickFloor">{{item.label}}</button>
       </scroll-view>
       <view wx:if="{{!visibleTables.length}}" class="rec-state">当前筛选下没有桌位</view>
       <view wx:else class="board-grid">
-        <button wx:for="{{visibleTables}}" wx:key="id" class="board-desk board-desk-{{item.status}} {{item.selected ? 'board-desk-selected' : ''}}" data-id="{{item.id}}" bindtap="tapTable" disabled="{{item.available && !canCreate}}">
+        <button wx:for="{{visibleTables}}" wx:key="id" class="board-desk board-desk-{{item.status}} {{item.floorTone ? 'rec-floor-card' : ''}} {{item.floorTone}} {{item.selected ? 'board-desk-selected' : ''}}" data-id="{{item.id}}" bindtap="tapTable" disabled="{{item.available && !canCreate}}">
           <view class="board-desk-name">{{item.name}}</view>
           <view class="board-desk-capacity">{{item.capacityLabel}}</view>
-          <view wx:if="{{item.deskMeta}}" class="board-desk-meta">{{item.deskMeta}}</view>
+          <view wx:if="{{item.deskMeta}}" class="board-desk-meta"><text class="{{item.floorTone ? 'rec-floor-label' : ''}}">{{item.floor}}</text>{{item.floor && item.typeLabel ? ' · ' : ''}}{{item.typeLabel}}</view>
           <view class="board-desk-footer">
             <view class="rec-status rec-status-{{item.status}}">{{item.selected ? '已选' : item.statusLabel}}</view>
             <text wx:if="{{item.status === 'booked' && item.ownerName}}" class="board-desk-owner">{{item.ownerName}}</text>

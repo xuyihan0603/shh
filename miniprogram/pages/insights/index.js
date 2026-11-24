@@ -1,6 +1,6 @@
 const { call, today, openAccess } = require('../../lib/api')
 const { SEGMENTS } = require('../../lib/customer-segments')
-const { canViewReports } = require('../../lib/reception')
+const { canManageOrders, canViewReports } = require('../../lib/reception')
 
 function totalFor(counts) {
   return SEGMENTS.reduce((sum, { id }) => sum + counts[id], 0)
@@ -22,7 +22,7 @@ function weekBreakdown(rows, index) {
 Page({
   data: {
     endDate: today(), maxDate: today(), weeks: 4, ranges: [4, 8],
-    loading: true, error: '', needsAccount: false,
+    loading: true, error: '', needsAccount: false, canViewCustomers: false,
     total: 0, distribution: [], rows: [], selected: '', breakdown: [], hasVisits: false,
   },
 
@@ -36,7 +36,8 @@ Page({
   async refresh(checkAccount = false) {
     const requestId = (this.requestId || 0) + 1
     this.requestId = requestId
-    this.setData({ loading: true, error: '', needsAccount: false, rows: [], distribution: [], breakdown: [] })
+    this.setData({ loading: true, error: '', needsAccount: false, rows: [], distribution: [], breakdown: [],
+      ...(checkAccount ? { canViewCustomers: false } : {}) })
     try {
       const maxDate = today()
       if (checkAccount || !this.actorKey) {
@@ -55,6 +56,7 @@ Page({
           this.followToday = true
         }
         this.actorKey = actorKey
+        this.setData({ canViewCustomers: canManageOrders(me.role) })
       }
       const endDate = this.followToday ? maxDate : this.data.endDate
       const result = await call('customerInsights', { endDate, weeks: this.data.weeks })
@@ -76,8 +78,9 @@ Page({
         hasVisits: rows.some(row => row.total > 0), breakdown: weekBreakdown(rows, index), loading: false })
     } catch (error) {
       if (requestId !== this.requestId) return
-      const needsAccount = ['UNAUTHORIZED', 'FORBIDDEN', 'NAME_REQUIRED'].includes(error.code)
-      this.setData({ loading: false, error: error.message || '客群分析加载失败，请重试。', needsAccount })
+      const needsAccount = ['UNAUTHORIZED', 'FORBIDDEN', 'NAME_REQUIRED', 'ACCESS_PENDING'].includes(error.code)
+      this.setData({ loading: false, error: error.message || '客群分析加载失败，请重试。', needsAccount,
+        ...(needsAccount ? { canViewCustomers: false } : {}) })
     }
   },
 
@@ -100,5 +103,8 @@ Page({
     this.setData({ selected: this.data.rows[index].endDate, breakdown: weekBreakdown(this.data.rows, index) })
   },
   retry() { return this.refresh(true) },
+  openCustomers() {
+    if (this.data.canViewCustomers) wx.navigateTo({ url: '/pages/customers/index' })
+  },
   openAccount() { wx.switchTab({ url: '/pages/account/index' }) },
 })

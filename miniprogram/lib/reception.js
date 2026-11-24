@@ -63,9 +63,18 @@ function isPhone(value) {
 }
 
 function formatCapacity(min, max) {
-  if (max == null) return '容量待补'
+  if (max == null) return '人数待补充'
   if (min == null) return `最多 ${max} 人`
   return min === max ? `${max} 人` : `${min}–${max} 人`
+}
+
+function floorTone(floor) {
+  switch (floor) {
+    case '一楼': case '1楼': return 'floor-one'
+    case '二楼': case '2楼': return 'floor-two'
+    case '三楼': case '3楼': return 'floor-three'
+    default: return ''
+  }
 }
 
 function presentTables(tables, orderId) {
@@ -78,6 +87,7 @@ function presentTables(tables, orderId) {
       status,
       statusLabel: own ? '本单桌位' : (STATUSES[status] || '空桌'),
       typeLabel,
+      floorTone: floorTone(table.floor),
       deskMeta: [table.floor, typeLabel].filter(Boolean).join(' · '),
       capacityLabel: formatCapacity(table.minCapacity, table.capacity),
       available: !table.orderId || own,
@@ -87,7 +97,7 @@ function presentTables(tables, orderId) {
 
 function floorOptions(tables) {
   return [{ id: '', label: '全部楼层' }].concat(
-    [...new Set(tables.map(table => table.floor))].map(floor => ({ id: floor, label: floor }))
+    [...new Set(tables.map(table => table.floor))].map(floor => ({ id: floor, label: floor, floorTone: floorTone(floor) }))
   )
 }
 

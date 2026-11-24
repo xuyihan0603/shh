@@ -80,6 +80,66 @@ test('散客补录号码后可查档，修改联系电话和撤销到店按原�
   assert.equal(execute(state, 'manager', 'customerLookup', { phone }), null)
 })
 
+test('客户档案合计实际到店、最终消费以及各营销的有效预订，历史归属按员工账号保留', () => {
+  const state = boundStore()
+  const first = createBooking(state, '2025-06-01', {
+    tableIds: ['201', '202'], contact: '林女士', deposit: 70, depositMethod: '微信',
+  })
+  const settled = execute(state, 'front', 'settle', { ...first, amount: '0.10' })
+  const legacy = state.orders.find(order => order.id === settled.id)
+  legacy.phone = '0086 (138) 0000-1234'
+  delete legacy.customerVisit
+  delete legacy.ownerRole
+
+  const arrived = execute(state, 'front', 'arrive', createBooking(state, '2025-06-02', { contact: '林晓' }))
+  execute(state, 'front', 'save', { id: arrived.id, version: arrived.version, phone: otherPhone, contact: '改后联系人' })
+  const walkin = execute(state, 'front', 'save', { kind: 'walkin', tableIds: ['101'], guests: 2, phone }, new Date('2025-06-03T10:00:00Z'))
+  execute(state, 'front', 'settle', { ...walkin, amount: '0.20' })
+  createBooking(state, '2025-06-04', { contact: '林小姐' }, 'sales2')
+  createBooking(state, '2025-06-05', { phone: otherPhone, contact: '赵女士' }, 'sales2')
+  const cancelled = execute(state, 'front', 'arrive', createBooking(state, '2025-06-06', { contact: '取消别名' }, 'sales2'))
+  execute(state, 'front', 'cancel', cancelled)
+  createBooking(state, '2025-06-07', { contact: '店长代订' }, 'front')
+  execute(state, 'front', 'cancel', createBooking(state, '2025-06-08', { phone: '13700008888' }))
+
+  execute(state, 'manager', 'setStaffRole', { id: 'sales1', expectedRole: 'sales', role: 'manager' })
+  execute(state, 'manager', 'setStaffRole', { id: 'front', expectedRole: 'manager', role: 'sales' })
+  execute(state, 'manager', 'setStaffProfile', { id: 'sales1', expectedName: '李华', expectedServicePhone: '', name: '李新', servicePhone: '' })
+
+  const profile = {
+    phone, contact: '林晓', visits: 3, amount: 0.3, pending: 1, segment: { id: 'potential', label: '可发展客' },
+    salesBookings: [{ staffId: 'sales1', name: '李新', count: 2 }, { staffId: 'sales2', name: '王梅', count: 1 }],
+  }
+  const pending = {
+    phone: otherPhone, contact: '赵女士', visits: 0, amount: 0, pending: 0, segment: null,
+    salesBookings: [{ staffId: 'sales2', name: '王梅', count: 1 }],
+  }
+  assert.deepEqual(execute(state, 'sales1', 'customerDirectory').customers, [profile, pending])
+  for (const query of ['林女', '林小姐', '+86 (138) 0000-1234', '1234']) {
+    assert.deepEqual(execute(state, 'manager', 'customerDirectory', { query }).customers, [profile])
+  }
+  for (const query of ['取消别名', '改后联系人', '13700008888']) {
+    assert.deepEqual(execute(state, 'manager', 'customerDirectory', { query }).customers, [])
+  }
+  assert.equal(Object.hasOwn(settled, 'ownerRole'), false)
+})
+
+test('客户档案跨页保留搜索范围且不会重复同一个顾客', () => {
+  const state = boundStore()
+  for (let i = 1; i <= 28; i++) {
+    const day = String(i).padStart(2, '0')
+    createBooking(state, `2025-07-${day}`, { phone: `138000001${day}`, contact: i === 27 ? '其他客人' : '陈先生' })
+  }
+  const query = '陈'
+  const first = execute(state, 'manager', 'customerDirectory', { query })
+  assert.equal(first.customers.length, 25)
+  assert.ok(first.next)
+  const rest = execute(state, 'manager', 'customerDirectory', { query, afterPhone: first.next })
+  assert.deepEqual(rest.customers.map(profile => profile.phone), ['13800000126', '13800000128'])
+  assert.equal(rest.next, '')
+  assert.equal(new Set([...first.customers, ...rest.customers].map(profile => profile.phone)).size, 27)
+})
+
 test('每周按周末的累计到店次数分档，兼容历史号码并保留登记到店时的日期和号码', () => {
   const state = boundStore()
   const cutoff = '2025-02-04'

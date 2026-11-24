@@ -40,6 +40,7 @@ Page({
   },
 
   onUnload() {
+    this.unloaded = true
     this.orderRequest = (this.orderRequest || 0) + 1
   },
 
@@ -59,7 +60,7 @@ Page({
     }
     const request = (this.orderRequest || 0) + 1
     this.orderRequest = request
-    this.setData({ loading: true, order: null, customerProfile: null, error: '', needsName: false })
+    this.setData({ loading: true, order: null, customerProfile: null, error: '', needsName: false, actionError: '' })
     try {
       const order = await call('order', { id })
       if (request !== this.orderRequest) return
@@ -89,6 +90,7 @@ Page({
         depositLabel: order.deposit > 0 ? formatMoney(order.deposit) : '未收订金',
         canDial: isPhone(order.phone),
         canNotify: order.kind === 'booking' && order.status === 'booked' && order.canEdit,
+        tableSwapStaffName: order.tableSwapStaffName || order.ownerName || '原接单营销',
         logs: (order.logs || []).slice().reverse().map((log, index) => ({
           ...log, index, timeLabel: localLogTime(log.at),
         })),
@@ -120,6 +122,37 @@ Page({
   edit() {
     const { order, mutating } = this.data
     if (order && order.canEdit && !mutating) wx.navigateTo({ url: bookingUrl('', '', { id: order.id }) })
+  },
+
+  openTableSwap() {
+    const { order, mutating } = this.data
+    if (order && order.canSwapTables && !mutating) {
+      wx.navigateTo({ url: '/pages/table-swap/index?id=' + encodeURIComponent(order.id) })
+    }
+  },
+
+  askTableSwapAuthorization() {
+    const { order, mutating } = this.data
+    if (!order || !order.canAuthorizeTableSwap || mutating || this.modalOpen) return
+    const revoke = order.tableSwapAuthorized
+    const staffName = order.tableSwapStaffName
+    this.modalOpen = true
+    wx.showModal({
+      title: revoke ? '撤回换桌授权' : '授权换桌',
+      content: revoke
+        ? `撤回后，${staffName}需要重新获授权才能为这笔订单换桌。`
+        : `允许${staffName}为 ${order.date} ${order.mealLabel} 的 ${order.tableLabel} 换桌一次？可换空桌，也可与同餐段的预订交换。`,
+      confirmText: revoke ? '确认撤回' : '确认授权',
+      cancelText: '返回',
+      confirmColor: revoke ? '#a04636' : '#103947',
+      success: result => {
+        if (result.confirm && this.data.order === order) {
+          return this.mutate('setTableSwapAuthorization', order, { staffId: revoke ? null : order.ownerId },
+            revoke ? '已撤回授权' : '已授权换桌')
+        }
+      },
+      complete: () => { this.modalOpen = false },
+    })
   },
 
   openNotification(event) {
@@ -178,24 +211,25 @@ Page({
     return this.mutate('settle', order, { amount })
   },
 
-  async mutate(action, order, extra = {}) {
+  async mutate(action, order, extra = {}, success = ACTIONS[action].success) {
     if (this.data.mutating) return
     this.setData({ mutating: true, actionError: '' })
     try {
       const updated = await call(action, { id: order.id, version: order.version, ...extra })
+      if (this.unloaded) return
       this.setData({ amountOpen: false })
       this.showOrder(updated)
-      wx.showToast({ title: ACTIONS[action].success, icon: 'success' })
+      wx.showToast({ title: success, icon: 'success' })
     } catch (error) {
-      if (error.code === 'VERSION_CONFLICT') {
-        await this.loadOrder()
-        this.setData({ actionError: '订单已更新，请核对最新记录后再操作。' })
-      } else {
-        this.setData({ actionError: errorMessage(error, '操作未完成，请重试。') })
-      }
-      if (action !== 'settle') wx.showToast({ title: this.data.actionError, icon: 'none' })
+      if (this.unloaded) return
+      const stale = error.code === 'VERSION_CONFLICT'
+      if (stale || action === 'setTableSwapAuthorization') await this.loadOrder()
+      if (this.unloaded) return
+      const actionError = stale ? '订单已更新，请核对最新记录后再操作。' : errorMessage(error, '操作未完成，请重试。')
+      this.setData({ actionError })
+      if (action !== 'settle') wx.showToast({ title: actionError, icon: 'none' })
     } finally {
-      this.setData({ mutating: false })
+      if (!this.unloaded) this.setData({ mutating: false })
     }
   },
 
