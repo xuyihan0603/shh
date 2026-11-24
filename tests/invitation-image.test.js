@@ -9,7 +9,7 @@ const source = readFileSync(require.resolve('../miniprogram/lib/invitation-image
 const photoPath = '/assets/storefront.jpg'
 const segmenter = new Intl.Segmenter('zh', { granularity: 'grapheme' })
 
-function canvasHarness({ useSegmenter = true } = {}) {
+function canvasHarness({ runtimeIntl = Intl, legacyArrays = false } = {}) {
   const frames = []
   const photos = []
   const context = {
@@ -44,15 +44,25 @@ function canvasHarness({ useSegmenter = true } = {}) {
   }
 
   const module = { exports: {} }
-  runInNewContext(source, { module, wx, Intl: useSegmenter ? Intl : {} })
+  runInNewContext((legacyArrays ? 'Array.prototype.flatMap = undefined;\n' : '') + source, { module, wx, Intl: runtimeIntl })
   const render = (text, picture) => module.exports.createInvitationImage(canvas, text, picture)
   return { render, frames, photos, canvas }
 }
 
 const tick = () => new Promise(resolve => setImmediate(resolve))
 
+test('微信暴露的分词接口无法初始化时，预订图仍能绘制文字和表情', async () => {
+  const runtimeIntl = { Segmenter: class { constructor() { throw new RangeError('unsupported locale') } } }
+  const { render, frames } = canvasHarness({ runtimeIntl })
+  const text = '预订二楼205包房 🦞'
+  const result = render(text, null)
+  assert.equal(frames[0].rows.map(row => row.text).join(''), text)
+  frames[0].options.success({ tempFilePath: 'wxfile://tmp/fallback.jpg' })
+  assert.equal(await result, 'wxfile://tmp/fallback.jpg')
+})
+
 test('全店桌位的预订图完整折行，保留段落、英文、表情及门头照片', async () => {
-  const { render, frames, photos, canvas } = canvasHarness({ useSegmenter: false })
+  const { render, frames, photos, canvas } = canvasHarness({ runtimeIntl: {}, legacyArrays: true })
   const { store, tables } = pilotLayout()
   const order = {
     date: '2026-11-24', meal: 'dinner', guests: 300,

@@ -42,6 +42,7 @@
             </view>
           </block>
           <block wx:else>
+            <text wx:if="{{!invitationImagePath}}" class="notify-message" user-select>{{message}}</text>
             <view wx:if="{{generating}}" class="rec-state">正在生成预订图…</view>
             <block wx:elif="{{imageError}}">
               <view class="rec-alert notify-feedback">{{imageError}}</view>
@@ -68,5 +69,5 @@
       </block>
     </block>
   </view>
-  <canvas wx:if="{{!smsOnly}}" type="2d" id="invitation-image-canvas" class="notify-canvas" aria-hidden="{{true}}" />
+  <canvas wx:if="{{card && !smsOnly}}" type="2d" id="invitation-image-canvas" class="notify-canvas" aria-hidden="{{true}}" />
 </view>

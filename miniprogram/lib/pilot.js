@@ -15,9 +15,13 @@ const floors = [
   ]],
 ]
 
-const pilotTables = floors.flatMap(([floor, seats]) => seats.map(([name, minCapacity, capacity]) => ({
-  id: name, name, floor, type: name === '卡1' || hallNames.includes(name) ? 'hall' : 'room', minCapacity, capacity,
-})))
+const pilotTables = []
+for (const [floor, seats] of floors) {
+  for (const [name, minCapacity, capacity] of seats) {
+    const type = name === '卡1' || hallNames.includes(name) ? 'hall' : 'room'
+    pilotTables.push({ id: name, name, floor, type, minCapacity, capacity })
+  }
+}
 const pilotTableIds = new Set(pilotTables.map(table => table.id))
 
 const PILOT_STORE = {

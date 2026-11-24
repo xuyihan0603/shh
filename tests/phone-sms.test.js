@@ -8,7 +8,9 @@ const {pilotLayout} = require('../miniprogram/lib/pilot')
 const invitation = require('../miniprogram/lib/invitation')
 const {notificationDetails} = require('../server/notifications')
 
-function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}, createInvitationImage = async () => 'wxfile://tmp/test.jpg') {
+function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}, loadImageModule = () => ({
+  createInvitationImage: async () => 'wxfile://tmp/test.jpg',
+})) {
   const state = Object.assign(seed(), pilotLayout())
   const owner = state.staff.find(person => person.id === 'sales1')
   owner.nameBound = true
@@ -50,7 +52,7 @@ function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}, createInv
   runInNewContext(readFileSync(require.resolve('../miniprogram/pages/notify/index.js'), 'utf8'), {
     Page(definition) {page = definition}, wx,
     require(name) {
-      if (name.endsWith('/invitation-image')) return {createInvitationImage}
+      if (name.endsWith('/invitation-image')) return loadImageModule()
       return name.endsWith('/api') ? api : invitation
     }
   })
@@ -66,6 +68,27 @@ async function show(page) {
   page.onShow()
   await new Promise(setImmediate)
 }
+
+test('图文模块无法加载时，短信能复制完整正文，微信页能显示订单文字并重试', async () => {
+  let attempts = 0
+  function unavailable() { attempts++; throw new Error('Image module unavailable') }
+  const sms = smsPage('android', 'sms', {}, unavailable)
+  await show(sms.page)
+  sms.page.copy()
+  assert.equal(attempts, 0)
+  assert.equal(sms.page.data.phone, '13800000001')
+  assert.match(sms.clipboard[0].data, /本店地址:/)
+
+  const chat = smsPage('android', 'wechat', {}, unavailable)
+  await show(chat.page)
+  assert.equal(attempts, 1)
+  assert.equal(chat.page.data.loading, false)
+  assert.equal(chat.page.data.generating, false)
+  assert.match(chat.page.data.message, /人数10位/)
+  assert.match(chat.page.data.imageError, /重新生成/)
+  await chat.page.generateImage()
+  assert.equal(attempts, 2)
+})
 
 test('安卓和 iOS 点击一次后先复制完整正文，再仅用客人号码打开短信', async () => {
   for (const platform of ['android', 'ios']) {
@@ -192,11 +215,12 @@ test('手机短信页只提供一个按钮，预订消息页保留微信分享�
 
 test('编辑后的预订文字和门头合为同一份草稿，发送一次图片并省略地址', async () => {
   const images = new Map()
-  const {page, wx} = smsPage('android', 'message', {}, async (_, text, photo) => {
+  async function createInvitationImage(_, text, photo) {
     const path = 'wxfile://tmp/poster-' + images.size + '.jpg'
     images.set(path, {text, photo})
     return path
-  })
+  }
+  const {page, wx} = smsPage('android', 'message', {}, () => ({createInvitationImage}))
   const storage = new Map()
   let chatUrl
   const sent = []
@@ -237,7 +261,9 @@ test('编辑后的预订文字和门头合为同一份草稿，发送一次图�
 
 test('离开页面时尚未导出的预订图不会重新显示或发起分享', async () => {
   let resolveImage
-  const {page, wx} = smsPage('android', 'message', {}, () => new Promise(resolve => {resolveImage = resolve}))
+  const {page, wx} = smsPage('android', 'message', {}, () => ({
+    createInvitationImage: () => new Promise(resolve => {resolveImage = resolve}),
+  }))
   wx.openChatTool = () => assert.fail('不能打开旧草稿')
   await show(page)
   assert.equal(page.data.generating, true)

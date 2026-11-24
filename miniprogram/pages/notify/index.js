@@ -1,6 +1,5 @@
 const api = require('../../lib/api')
 const { invitationText, smsFields } = require('../../lib/invitation')
-const { createInvitationImage } = require('../../lib/invitation-image')
 
 const CHAT_DRAFT_KEY = 'shh.chatTool.draft'
 const STOREFRONT_ASSET = '/assets/storefront.jpg'
@@ -189,6 +188,7 @@ Page({
           else reject(new Error('Canvas unavailable'))
         })
       })
+      const { createInvitationImage } = require('../../lib/invitation-image')
       return createInvitationImage(canvas, message, card.store === '珊瑚海' ? STOREFRONT_ASSET : null)
     })
     this.imageWork = render.catch(() => {})
