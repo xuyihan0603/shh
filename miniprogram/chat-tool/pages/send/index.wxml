@@ -2,20 +2,26 @@
   <view class="navigation" style="padding-top: {{statusBarHeight}}px;">
     <button class="back" bindtap="goBack">返回</button>
   </view>
-  <view wx:if="{{invitationImagePath}}" class="title">预订图预览</view>
-  <scroll-view wx:if="{{invitationImagePath}}" type="list" class="content" scroll-y>
-    <view class="preview">
-      <image class="invitation" src="{{invitationImagePath}}" mode="widthFix" aria-label="图文预订" binderror="onImageError" />
+  <view wx:if="{{hasDraft}}" class="title">预订正文</view>
+  <scroll-view type="list" class="content" scroll-y>
+    <view class="composer">
+      <form wx:if="{{hasDraft}}" bind:submitToGroup="onSubmitToGroup">
+        <textarea
+          class="message"
+          aria-label="预订正文"
+          value="{{text}}"
+          maxlength="{{-1}}"
+          auto-height
+          bindinput="onInput"
+        />
+        <button
+          class="send"
+          form-type="submitToGroup"
+          need-show-entrance="{{false}}"
+          disabled="{{!hasText || submitted}}"
+        >发送文字</button>
+      </form>
+      <view wx:if="{{notice}}" class="notice">{{notice}}</view>
     </view>
   </scroll-view>
-  <view wx:if="{{canShareImage || shareNotice}}" class="footer">
-    <view wx:if="{{shareNotice}}" class="notice">{{shareNotice}}</view>
-    <button
-      wx:if="{{canShareImage}}"
-      class="send"
-      loading="{{shareState === 'sharing'}}"
-      disabled="{{shareState === 'sharing' || shareState === 'requested'}}"
-      bindtap="shareInvitation"
-    >发送图文预订</button>
-  </view>
 </view>

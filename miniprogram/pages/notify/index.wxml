@@ -30,30 +30,13 @@
       </block>
       <block wx:else>
         <view class="rec-panel notify-panel">
-          <view class="notify-heading">
-            <view class="rec-title">{{editingText ? '编辑预订文字' : '预订图文'}}</view>
-            <button wx:if="{{!editingText}}" class="notify-edit" disabled="{{generating || chatOpening}}" bindtap="editMessage">编辑文字</button>
-          </view>
-          <block wx:if="{{editingText}}">
-            <textarea class="notify-editor" aria-label="预订文字" value="{{editText}}" maxlength="{{-1}}" auto-height bindinput="changeText" />
-            <view class="notify-editor-actions">
-              <button class="rec-button rec-secondary" bindtap="finishEditing" data-cancel="{{true}}">取消</button>
-              <button class="rec-button rec-primary" disabled="{{!editText}}" bindtap="finishEditing">完成编辑</button>
-            </view>
-          </block>
-          <block wx:else>
-            <text wx:if="{{!invitationImagePath}}" class="notify-message" user-select>{{message}}</text>
-            <view wx:if="{{generating}}" class="rec-state">正在生成预订图…</view>
-            <block wx:elif="{{imageError}}">
-              <view class="rec-alert notify-feedback">{{imageError}}</view>
-              <button class="rec-button rec-secondary notify-action" bindtap="generateImage">重新生成</button>
-            </block>
-            <block wx:elif="{{invitationImagePath}}">
-              <button wx:if="{{canOpenChat || canShareImageMenu}}" class="rec-button rec-primary notify-action" loading="{{chatOpening}}" disabled="{{chatOpening}}" bindtap="openChat">{{canOpenChat ? '选择微信联系人' : '发送给朋友'}}</button>
-              <view wx:if="{{chatNotice || !(canOpenChat || canShareImageMenu)}}" class="rec-muted notify-hint">{{chatNotice || '长按下方预订图，选择「发送给朋友」。'}}</view>
-              <image class="notify-poster" src="{{invitationImagePath}}" mode="widthFix" show-menu-by-longpress="{{true}}" aria-label="{{message}}" />
-            </block>
-          </block>
+          <view class="rec-title">预订正文</view>
+          <text class="notify-message" user-select>{{message}}</text>
+          <button wx:if="{{canOpenChat}}" class="rec-button rec-primary notify-action" loading="{{chatOpening}}" disabled="{{chatOpening || copyStatus === 'copying'}}" bindtap="openChat">选择微信联系人</button>
+          <button class="rec-button notify-action {{canOpenChat ? 'rec-secondary' : 'rec-primary'}}" loading="{{copyStatus === 'copying'}}" disabled="{{copyStatus === 'copying' || chatOpening || sending}}" bindtap="copy">复制完整原文</button>
+          <view wx:if="{{copyStatus === 'success'}}" class="notify-success">已复制完整原文。打开微信好友或群聊，粘贴后发送。</view>
+          <view wx:elif="{{copyStatus === 'failed'}}" class="rec-alert notify-feedback">复制失败，可长按上方正文手动复制。</view>
+          <view wx:elif="{{chatNotice || !canOpenChat}}" class="rec-muted notify-hint">{{chatNotice || '可复制原文，打开微信好友或群聊后粘贴发送。'}}</view>
         </view>
         <view wx:if="{{cloudEnabled || cloudStatus === 'accepted' || cloudStatus === 'pending' || cloudNote}}" class="rec-panel notify-panel">
           <view class="rec-title">门店短信服务</view>
@@ -69,5 +52,4 @@
       </block>
     </block>
   </view>
-  <canvas wx:if="{{card && !smsOnly}}" type="2d" id="invitation-image-canvas" class="notify-canvas" aria-hidden="{{true}}" />
 </view>

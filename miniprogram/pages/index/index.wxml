@@ -1,15 +1,13 @@
 <view class="rec-page">
   <view class="board-hero">
-    <image class="board-hero-image" src="/assets/coral-tide.jpg" mode="aspectFill" aria-hidden="{{true}}" />
+    <image class="board-hero-image" src="/assets/steamed-croaker.jpg" mode="aspectFill" aria-hidden="{{true}}" />
     <view class="board-brand">
       <view class="board-emblem">
         <image class="board-emblem-image" src="/assets/coral-logo.jpg" mode="aspectFit" aria-hidden="{{true}}" />
       </view>
       <view class="board-identity">
         <view class="board-store">{{storeName}}</view>
-        <view wx:if="{{roleLabel}}" class="board-identity-meta">
-          <text class="board-role">{{roleLabel}}</text>
-        </view>
+        <view wx:if="{{roleLabel}}" class="board-role">{{roleLabel}}</view>
       </view>
     </view>
   </view>

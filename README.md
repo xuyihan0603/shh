@@ -35,9 +35,9 @@
 
 ### 分享预订和发送短信
 
-在已预订的订单详情点「发送微信」，预览包含预订文字和珊瑚海门头照片的图片。如需改字，点「编辑文字」。点「选择微信联系人」，选好好友或群聊后，点一次「发送图文预订」。对方收到一张完整图片。较旧版本也可长按预订图，选择「发送给朋友」。[微信聊天工具模式](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/chatTool.html) · [原生图片发送接口](https://developers.weixin.qq.com/miniprogram/dev/api/chattool/wx.shareImageToGroup.html)
+在已预订的订单详情点「发送微信」，即可预览完整的预订正文。点「选择微信联系人」，选好好友或群聊后可核对或编辑正文，再点「发送文字」，到微信聊天中查看发送结果。若无法打开联系人列表，可以点「复制完整原文」，到微信聊天中粘贴发送。[微信聊天工具模式](https://developers.weixin.qq.com/miniprogram/dev/framework/open-ability/chatTool.html)
 
-预订图列出用餐日期、星期、午宴或晚宴、餐位、人数和订餐电话。短信原文另含门店地址。「专职为您服务」一行使用接单时的员工姓名和该员工当前的服务手机号。管理员更正姓名后，新建预订会记录新姓名。服务手机号更新后，重新打开已有预订的消息也能看到新号码。
+微信与手机短信使用同一份预订正文，包含用餐日期、星期、午宴或晚宴、餐位、人数、门店地址和订餐电话。「专职为您服务」一行使用接单时的员工姓名和该员工当前的服务手机号。管理员更正姓名后，新建预订会记录新姓名。服务手机号更新后，重新打开已有预订的消息也能看到新号码。
 
 正式发布前，在微信公众平台「用户隐私保护指引」中声明剪切板用途，说明员工主动复制预订消息用于发送给客人。自动复制不可用时，员工仍可长按正文选择复制。[微信用户隐私保护指引](https://developers.weixin.qq.com/miniprogram/dev/framework/user-privacy/miniprogram-intro.html)
 

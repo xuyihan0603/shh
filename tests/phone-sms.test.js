@@ -8,9 +8,7 @@ const {pilotLayout} = require('../miniprogram/lib/pilot')
 const invitation = require('../miniprogram/lib/invitation')
 const {notificationDetails} = require('../server/notifications')
 
-function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}, loadImageModule = () => ({
-  createInvitationImage: async () => 'wxfile://tmp/test.jpg',
-})) {
+function notificationPage(platform = 'ios', channel = 'sms', smsOverrides = {}) {
   const state = Object.assign(seed(), pilotLayout())
   const owner = state.staff.find(person => person.id === 'sales1')
   owner.nameBound = true
@@ -51,15 +49,9 @@ function smsPage(platform = 'ios', channel = 'sms', smsOverrides = {}, loadImage
   let page
   runInNewContext(readFileSync(require.resolve('../miniprogram/pages/notify/index.js'), 'utf8'), {
     Page(definition) {page = definition}, wx,
-    require(name) {
-      if (name.endsWith('/invitation-image')) return loadImageModule()
-      return name.endsWith('/api') ? api : invitation
-    }
+    require(name) {return name.endsWith('/api') ? api : invitation}
   })
-  page.setData = (values, done) => { Object.assign(page.data, values); if (done) done() }
-  page.createSelectorQuery = () => ({
-    select() {return this}, fields() {return this}, exec(callback) {callback([{node: {}}])},
-  })
+  page.setData = values => Object.assign(page.data, values)
   page.onLoad({id: order.id, channel})
   return {page, wx, started, clipboard, cloudCalls, state, selectActor(id) {actor = id}}
 }
@@ -69,30 +61,29 @@ async function show(page) {
   await new Promise(setImmediate)
 }
 
-test('图文模块无法加载时，短信能复制完整正文，微信页能显示订单文字并重试', async () => {
-  let attempts = 0
-  function unavailable() { attempts++; throw new Error('Image module unavailable') }
-  const sms = smsPage('android', 'sms', {}, unavailable)
+test('微信聊天工具不可用时，仍可复制和短信一致的完整预订正文', async () => {
+  const sms = notificationPage('android')
+  const chat = notificationPage('android', 'wechat')
+  let opened = false
+  chat.wx.openChatTool = () => {opened = true}
   await show(sms.page)
-  sms.page.copy()
-  assert.equal(attempts, 0)
-  assert.equal(sms.page.data.phone, '13800000001')
-  assert.match(sms.clipboard[0].data, /本店地址:/)
-
-  const chat = smsPage('android', 'wechat', {}, unavailable)
   await show(chat.page)
-  assert.equal(attempts, 1)
   assert.equal(chat.page.data.loading, false)
-  assert.equal(chat.page.data.generating, false)
-  assert.match(chat.page.data.message, /人数10位/)
-  assert.match(chat.page.data.imageError, /重新生成/)
-  await chat.page.generateImage()
-  assert.equal(attempts, 2)
+  assert.equal(chat.page.data.message, sms.page.data.message)
+  assert.match(chat.page.data.message, /本店地址:江学路381弄22号/)
+
+  chat.page.openChat()
+  assert.equal(opened, false)
+  chat.page.copy()
+  assert.equal(chat.clipboard[0].data, sms.page.data.message)
+  chat.clipboard[0].success()
+  assert.equal(chat.page.data.copyStatus, 'success')
+  assert.equal(chat.started.length, 0)
 })
 
 test('安卓和 iOS 点击一次后先复制完整正文，再仅用客人号码打开短信', async () => {
   for (const platform of ['android', 'ios']) {
-    const {page, started, clipboard, state, cloudCalls} = smsPage(platform)
+    const {page, started, clipboard, state, cloudCalls} = notificationPage(platform)
     execute(state, 'sales1', 'bindStaffName', {name: '徐', servicePhone: '13800000002'})
     await page.load()
     assert.equal(page.data.canCompose, true)
@@ -124,7 +115,7 @@ test('安卓和 iOS 点击一次后先复制完整正文，再仅用客人号码
 })
 
 test('复制失败时留下原文供手动复制，打开失败时保留手动发送指引和重试入口', async () => {
-  const {page, wx, started, clipboard} = smsPage('android')
+  const {page, wx, started, clipboard} = notificationPage('android')
   await page.load()
   const message = page.data.message
 
@@ -145,7 +136,7 @@ test('复制失败时留下原文供手动复制，打开失败时保留手动�
 })
 
 test('微信不支持打开短信或缺少收件号码时仍可复制原文', async () => {
-  const unavailable = [smsPage('devtools'), smsPage('ios', 'sms', {phone: ''})]
+  const unavailable = [notificationPage('devtools'), notificationPage('ios', 'sms', {phone: ''})]
   for (const {page, started, clipboard} of unavailable) {
     await page.load()
     page.copy()
@@ -157,7 +148,7 @@ test('微信不支持打开短信或缺少收件号码时仍可复制原文', as
 })
 
 test('离开页面后迟到的剪贴板回调不会打开短信，订单权限撤销后清空预订信息', async () => {
-  const {page, started, clipboard, selectActor} = smsPage('android')
+  const {page, started, clipboard, selectActor} = notificationPage('android')
   await show(page)
   page.copy()
   page.onHide()
@@ -195,10 +186,11 @@ test('手机短信页只提供一个按钮，预订消息页保留微信分享�
   assert.equal((sms.match(/<button\b/g) || []).length, 1)
   assert.match(sms, /复制原文并打开短信/)
   assert.match(share, /bindtap="openChat"/)
+  assert.match(share, /bindtap="copy"/)
   assert.match(share, /bindtap="sendCloud"/)
   assert.doesNotMatch(template, /精简短信/)
 
-  const {page, wx, started, cloudCalls} = smsPage('ios', 'message', {enabled: true})
+  const {page, wx, started, cloudCalls} = notificationPage('ios', 'message', {enabled: true})
   let confirmation
   wx.showModal = options => { confirmation = options.success }
   await page.load()
@@ -213,63 +205,51 @@ test('手机短信页只提供一个按钮，预订消息页保留微信分享�
   assert.equal(page.data.cloudStatus, 'accepted')
 })
 
-test('编辑后的预订文字和门头合为同一份草稿，发送一次图片并省略地址', async () => {
-  const images = new Map()
-  async function createInvitationImage(_, text, photo) {
-    const path = 'wxfile://tmp/poster-' + images.size + '.jpg'
-    images.set(path, {text, photo})
-    return path
-  }
-  const {page, wx} = smsPage('android', 'message', {}, () => ({createInvitationImage}))
+test('微信联系人发送页收到包含门店地址的完整预订文字', async () => {
+  const {page, wx, state} = notificationPage('android', 'wechat')
+  state.store.address = '海城路 8 号（西门入口）'
   const storage = new Map()
   let chatUrl
-  const sent = []
-  wx.env = {USER_DATA_PATH: 'wxfile://usr'}
   wx.canIUse = () => true
   wx.setStorageSync = (key, value) => storage.set(key, value)
   wx.getStorageSync = key => storage.get(key)
   wx.removeStorageSync = key => storage.delete(key)
   wx.getWindowInfo = () => ({statusBarHeight: 24})
-  wx.getFileSystemManager = () => ({
-    readdirSync: () => [], copyFileSync: (src, dest) => images.set(dest, images.get(src)),
-    unlinkSync: path => images.delete(path),
-  })
   wx.openChatTool = options => {chatUrl = options.url; options.success()}
-  wx.shareImageToGroup = options => {sent.push(images.get(options.imagePath)); options.success()}
   await show(page)
-  const updatedText = page.data.message + '\n请提前十分钟到店。'
-  assert.doesNotMatch(updatedText, /本店地址|江学路|门店定位|https?:\/\//)
-  page.editMessage()
-  page.changeText({detail: {value: updatedText}})
-  page.finishEditing({currentTarget: {dataset: {}}})
-  await page.imageWork
+  const message = page.data.message
+  assert.match(message, /本店地址:海城路 8 号（西门入口）/)
   page.openChat()
+  page.onHide()
+
+  const url = new URL(chatUrl, 'https://example.test')
+  assert.equal(url.pathname, '/chat-tool/pages/send/index')
   let chat
   runInNewContext(readFileSync(require.resolve('../miniprogram/chat-tool/pages/send/index.js'), 'utf8'), {
     wx, Page(definition) {chat = definition},
   })
   chat.setData = data => Object.assign(chat.data, data)
-  chat.onLoad({token: new URL(chatUrl, 'https://example.test').searchParams.get('token')})
-  assert.deepEqual(sent, [])
-  chat.shareInvitation()
-  assert.deepEqual(sent, [{text: updatedText, photo: '/assets/storefront.jpg'}])
+  chat.onLoad({token: url.searchParams.get('token')})
+  assert.equal(chat.data.text, message)
   assert.equal(storage.size, 0)
-  page.onHide()
-  await show(page)
-  assert.equal(page.data.message, updatedText)
 })
 
-test('离开页面时尚未导出的预订图不会重新显示或发起分享', async () => {
-  let resolveImage
-  const {page, wx} = smsPage('android', 'message', {}, () => ({
-    createInvitationImage: () => new Promise(resolve => {resolveImage = resolve}),
-  }))
-  wx.openChatTool = () => assert.fail('不能打开旧草稿')
+test('微信联系人列表打开失败会清除草稿，仍可复制正文发送', async () => {
+  const {page, wx, clipboard} = notificationPage('android', 'wechat')
+  const storage = new Map()
+  let chat
+  wx.canIUse = () => true
+  wx.setStorageSync = (key, value) => storage.set(key, value)
+  wx.getStorageSync = key => storage.get(key)
+  wx.removeStorageSync = key => storage.delete(key)
+  wx.openChatTool = options => {chat = options}
   await show(page)
-  assert.equal(page.data.generating, true)
-  page.onHide()
-  resolveImage('wxfile://tmp/obsolete.jpg')
-  await page.imageWork
-  assert.equal(page.data.invitationImagePath, '')
   page.openChat()
+  chat.fail({errMsg: 'openChatTool:fail system error'})
+
+  assert.equal(storage.size, 0)
+  assert.equal(page.data.chatOpening, false)
+  assert.match(page.data.chatNotice, /复制/)
+  page.copy()
+  assert.equal(clipboard[0].data, page.data.message)
 })

@@ -39,56 +39,6 @@
   margin-top: 12rpx;
 }
 
-.notify-poster {
-  display: block;
-  width: 100%;
-  margin-top: 18rpx;
-  border-radius: 12rpx;
-}
-
-.notify-canvas {
-  position: fixed;
-  left: -1000px;
-  top: 0;
-  width: 8px;
-  height: 8px;
-  pointer-events: none;
-}
-
-.notify-heading, .notify-editor-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12rpx;
-}
-
-.notify-edit {
-  margin: 0;
-  padding: 4rpx 12rpx;
-  background: transparent;
-  color: #103947;
-  font-size: 26rpx;
-}
-
-.notify-edit::after { border: 0; }
-
-.notify-editor {
-  box-sizing: border-box;
-  width: 100%;
-  margin-top: 16rpx;
-  padding: 16rpx;
-  border: 1rpx solid #b6c8c6;
-  border-radius: 12rpx;
-  line-height: 1.6;
-}
-
-.notify-editor-actions { margin-top: 16rpx; }
-
-.notify-editor-actions .rec-button {
-  flex: 1;
-  margin: 0;
-}
-
 .notify-hint,
 .notify-feedback,
 .notify-success,

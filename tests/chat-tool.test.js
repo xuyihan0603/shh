@@ -7,132 +7,103 @@ const source = fs.readFileSync(require.resolve('../miniprogram/chat-tool/pages/s
 const draftKey = 'shh.chatTool.draft'
 const now = 1_800_000_000_000
 const maxAge = 10 * 60 * 1000
-const folder = 'wxfile://usr'
 const token = 'current'
-const path = folder + '/shh-invite-' + token + '.jpg'
-const draft = { token, invitationImagePath: path, createdAt: now }
+const text = '本店地址:江学路381弄22号\n' + '预订信息 %20、100% & 桌号 A+B 🦞\n'.repeat(12)
+const draft = { token, text, createdAt: now }
 
-function chatTool({ storage = new Map([[draftKey, draft]]), supported = true } = {}) {
-  const shares = []
-  const removedFiles = []
-  let time = now
+function chatTool(storage = new Map([[draftKey, draft]])) {
   let page
   vm.runInNewContext(source, {
-    Date: { now: () => time },
+    Date: { now: () => now },
     Page(config) {
       page = { ...config, setData(data) { Object.assign(this.data, data) } }
     },
     wx: {
-      env: { USER_DATA_PATH: folder },
       getWindowInfo: () => ({ statusBarHeight: 24 }),
       getStorageSync: key => storage.get(key),
       removeStorageSync: key => storage.delete(key),
-      getFileSystemManager: () => ({ unlinkSync: imagePath => removedFiles.push(imagePath) }),
-      canIUse: () => supported,
-      shareImageToGroup: options => shares.push(options),
+      canIUse: () => true,
     },
   })
-  return { page, storage, shares, removedFiles, setTime: value => { time = value } }
+  return { page, storage }
 }
 
-test('预订图只通过一次原生图片分享发送，不附加小程序入口', () => {
-  const template = fs.readFileSync(require.resolve('../miniprogram/chat-tool/pages/send/index.wxml'), 'utf8')
-  assert.match(template, /<image\b[^>]*\bsrc="{{invitationImagePath}}"/)
-  assert.match(template, /<button\b[^>]*\bbindtap="shareInvitation"[^>]*>发送图文预订<\/button>/)
-
-  const { page, storage, shares, removedFiles } = chatTool()
+test('聊天工具原样回填含地址的长正文，并在使用后清除草稿', () => {
+  const { page, storage } = chatTool()
   page.onLoad({ token })
-  assert.equal(page.data.invitationImagePath, path)
+  assert.equal(page.data.text, text)
   assert.equal(storage.has(draftKey), false)
 
-  page.shareInvitation()
-  page.shareInvitation()
-  assert.equal(shares.length, 1)
-  assert.equal(shares[0].imagePath, path)
-  assert.equal(shares[0].needShowEntrance, false)
-
-  shares[0].success()
-  page.shareInvitation()
-  assert.equal(shares.length, 1)
-  assert.match(page.data.shareNotice, /在微信聊天中查看发送结果/)
-  page.onUnload()
-  assert.deepEqual(removedFiles, [path])
-
-  const reopened = chatTool({ storage })
+  const reopened = chatTool(storage)
   reopened.page.onLoad({ token })
-  reopened.page.shareInvitation()
-  assert.equal(reopened.page.data.invitationImagePath, '')
-  assert.equal(reopened.shares.length, 0)
+  assert.equal(reopened.page.data.text, '')
 })
 
-test('未匹配令牌的入口保留有效草稿，过期草稿和旧版本草稿无法发送', () => {
+test('未匹配令牌的入口保留有效草稿，过期和旧版图片草稿无法发送', () => {
   const { storage } = chatTool()
   for (const query of [{}, { token: 'other' }]) {
-    const { page, shares } = chatTool({ storage })
+    const { page } = chatTool(storage)
     page.onLoad(query)
-    page.shareInvitation()
-    assert.equal(page.data.invitationImagePath, '')
-    assert.equal(shares.length, 0)
+    assert.equal(page.data.text, '')
     assert.equal(storage.get(draftKey), draft)
   }
 
   for (const invalid of [
     { ...draft, createdAt: now - maxAge },
     { ...draft, createdAt: now + 1 },
-    { token, text: '旧预订正文', storefrontImagePath: folder + '/shh-storefront.jpg', createdAt: now },
-    { ...draft, invitationImagePath: folder + '/some-other-invitation.jpg' },
+    { token, invitationImagePath: 'wxfile://usr/shh-invite-current.jpg', createdAt: now },
   ]) {
     storage.set(draftKey, invalid)
-    const { page, shares, removedFiles } = chatTool({ storage })
+    const { page } = chatTool(storage)
     page.onLoad({ token })
-    page.shareInvitation()
-    page.onUnload()
-    assert.equal(page.data.invitationImagePath, '')
-    assert.equal(shares.length, 0)
+    assert.equal(page.data.text, '')
     assert.equal(storage.has(draftKey), false)
-    assert.deepEqual(removedFiles, [])
   }
 })
 
-test('原生分享取消或失败后可重试，返回时保留原生接口正在读取的图片', () => {
-  const { page, shares, removedFiles } = chatTool()
-  page.onLoad({ token })
-  page.shareInvitation()
-  shares[0].fail({ errMsg: 'shareImageToGroup:fail cancel' })
-  assert.match(page.data.shareNotice, /已取消发送/)
-
-  page.shareInvitation()
-  shares[1].fail({ errMsg: 'shareImageToGroup:fail image inaccessible' })
-  assert.match(page.data.shareNotice, /返回预订消息页转发图片/)
-
-  page.shareInvitation()
-  page.onUnload()
-  assert.deepEqual(removedFiles, [])
-  shares[2].success()
-  assert.deepEqual(removedFiles, [path])
+test('微信原生文本表单发送完整正文，且不附加小程序入口', () => {
+  const template = fs.readFileSync(require.resolve('../miniprogram/chat-tool/pages/send/index.wxml'), 'utf8')
+  const form = template.match(/<form\b[^>]*\bbind:submitToGroup="onSubmitToGroup"[^>]*>([\s\S]*?)<\/form>/)
+  assert.ok(form)
+  assert.match(form[0], /<form\b[^>]*\bwx:if="{{hasDraft}}"/)
+  const field = form[1].match(/<textarea\b[^>]*\bvalue="{{text}}"[^>]*>/)
+  assert.ok(field)
+  assert.match(field[0], /\bmaxlength="{{-1}}"/)
+  assert.match(field[0], /\bbindinput="onInput"/)
+  const button = form[1].match(/<button\b[^>]*\bform-type="submitToGroup"[^>]*>/)
+  assert.ok(button)
+  assert.match(button[0], /\bneed-show-entrance="{{false}}"/)
+  assert.match(button[0], /\bdisabled="{{[^"]*\bsubmitted\b[^"]*}}"/)
+  assert.match(button[0], /\bdisabled="{{[^"]*!hasText\b[^"]*}}"/)
 })
 
-test('低版本微信和图片无法读取时提示返回，打开后过期的图片也无法分享', () => {
-  const unsupported = chatTool({ supported: false })
-  unsupported.page.onLoad({ token })
-  unsupported.page.shareInvitation()
-  assert.equal(unsupported.page.data.invitationImagePath, path)
-  assert.match(unsupported.page.data.shareNotice, /返回预订消息页转发/)
-  assert.equal(unsupported.shares.length, 0)
+test('确认发送前可以编辑正文，清空后保留输入框', () => {
+  const { page } = chatTool()
+  page.onLoad({ token })
+  page.onInput({ detail: { value: '  \n' } })
+  assert.equal(page.data.hasDraft, true)
+  assert.equal(page.data.hasText, false)
 
-  const broken = chatTool()
-  broken.page.onLoad({ token })
-  broken.page.onImageError()
-  broken.page.shareInvitation()
-  assert.match(broken.page.data.shareNotice, /预订图无法打开/)
-  assert.equal(broken.page.data.invitationImagePath, '')
-  assert.equal(broken.shares.length, 0)
+  const revised = text + '请提前十分钟到店。'
+  page.onInput({ detail: { value: revised } })
+  assert.equal(page.data.text, revised)
+  assert.equal(page.data.hasText, true)
+})
 
-  const expired = chatTool()
-  expired.page.onLoad({ token })
-  expired.setTime(now + maxAge)
-  expired.page.shareInvitation()
-  assert.match(expired.page.data.shareNotice, /预订图已过期/)
-  assert.equal(expired.page.data.invitationImagePath, '')
-  assert.equal(expired.shares.length, 0)
+test('原生文字发送取消或失败后保留正文，并允许重试', () => {
+  const { page } = chatTool()
+  page.onLoad({ token })
+
+  page.onSubmitToGroup({ detail: { errMsg: 'submitToGroup:fail cancel' } })
+  assert.equal(page.data.submitted, false)
+  assert.match(page.data.notice, /已取消.*重试/)
+
+  page.onSubmitToGroup({ detail: { errMsg: 'submitToGroup:fail system error' } })
+  assert.equal(page.data.submitted, false)
+  assert.equal(page.data.text, text)
+  assert.match(page.data.notice, /复制原文/)
+
+  page.onSubmitToGroup({ detail: { errMsg: 'submitToGroup:ok' } })
+  assert.equal(page.data.submitted, true)
+  assert.match(page.data.notice, /在微信聊天中查看发送结果/)
 })
